@@ -5,10 +5,13 @@ Property Callee As Expression;
 
 Property Args As %ListOfObjects;
 
-Method %OnNew(pCallee As Expression, pArgs As %ListOfObjects) As %Status
+Property Partial As %Boolean;
+
+Method %OnNew(pCallee As Expression, pArgs As %ListOfObjects, pPartial As %Boolean = 0) As %Status
 {
 		Set ..Callee = pCallee
 		Set ..Args = pArgs
+		Set ..Partial = pPartial
 		Quit $$$OK
 }
 
