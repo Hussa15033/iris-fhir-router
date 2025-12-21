@@ -28,6 +28,10 @@ Method ParseExpression(pRBP As %Integer) As Auwais.FHIRPath.Expr.Expression
 	#dim nud As Auwais.FHIRPath.Parselet.Prefix
 	Set nud = ..Prefix.GetAt(t1.Type)
 
+	If (t1.Type = "EOF") {
+		Quit ##class(Auwais.FHIRPath.Expr.PartialExpr).%New()
+	}
+
 	Throw:nud="" ##class(%Exception.General).%New("No prefix parselet found","-3922",,"No prefix parselet found for " _ t1.Type)
 	
 	#; Write "nud is " _ $CLASSNAME(nud),!
@@ -47,7 +51,7 @@ Method ParseExpression(pRBP As %Integer) As Auwais.FHIRPath.Expr.Expression
 
 ClassMethod Test()
 {
-	Set input = "Patient.telecom.where(system='phone' and use='mobile').value.first()"
+	Set input = "Patient.telecome.where(us"
 	Set tokenStream = ##class(Auwais.FHIRPath.TokenStream).%New(input)
 	Set parser = ##class(Auwais.FHIRPath.Parser).%New(tokenStream)
 

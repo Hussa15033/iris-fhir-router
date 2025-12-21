@@ -35,6 +35,9 @@ Method %OnNew(pInput As %String) As %Status
 
 Method Peek() As Auwais.FHIRPath.Tokens.Token
 {
+	If (..TokenIndex > ..Tokens.Size) {
+		Set ..TokenIndex = ..Tokens.Size
+	}
 	Return ..Tokens.GetAt(..TokenIndex)
 }
 
