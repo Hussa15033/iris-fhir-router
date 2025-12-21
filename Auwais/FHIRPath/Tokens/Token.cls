@@ -18,4 +18,9 @@ Method %OnNew(pType As %String(VALUELIST=",NUMBER,IDENT,PLUS,MINUS,STAR,SLASH,LP
 		Quit $$$OK
 }
 
+Method AsString()
+{
+	Return ..Type _ ":" _ ..Lexeme _ ":" _ ..Literal
+}
+
 }
