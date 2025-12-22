@@ -7,7 +7,7 @@ Class Auwais.FHIRPath.TestParser Extends %RegisteredObject
 
 ClassMethod RunOneTest(pI, pSearchTerm, pSuggestion) As %Boolean
 {
-		Write "Running test " _ pI
+		Write "Running test " _ pI _ "(" _ pSearchTerm _ ")"
 		/// Run a search term and ensure pSuggestion is in the list of suggestions returned
 		Set autocomplete = ##class(Auwais.FHIRPath.Autocomplete).%New()
 		Set suggestionList = autocomplete.Suggest(pSearchTerm)
@@ -37,6 +37,9 @@ ClassMethod Test()
 	Do ..RunOneTest(10, "Patient.name.t", "text.")
 	Do ..RunOneTest(11, "Patient.name.text.fir", "first()")
 	Do ..RunOneTest(12, "Patient.name.text.first().", "substring")
+	Do ..RunOneTest(13, "Patient.telecom.where(system='phone' and use='mobile').", "first()")
+	Do ..RunOneTest(14, "Patient.telecom.where(system='phone' and use='mobile').", "last()")
+	Do ..RunOneTest(15, "Patient.telecom.where(system='phone' and use='mobile').first().", "value.")
 }
 
 }
