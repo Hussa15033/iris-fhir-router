@@ -45,6 +45,32 @@ Method SearchPaths(pResourceType As %String, pSearchTerm As %String, ByRef paths
 	}
 }
 
+Method InorderTraversal(pExpr As Auwais.FHIRPath.Expr.Expression, pCtx As Auwais.FHIRPath.FHIRContextHelper, ByRef finalTokenPrefix)
+{
+	/// Reach a leaf node
+	If (pExpr = "") {
+		Quit
+	}
+
+	Set cls = $CLASSNAME(pExpr)
+	If cls = "Auwais.FHIRPath.Expr.BinaryExpr" {
+		Do ..InorderTraversal(pExpr.Left, pCtx, .finalTokenPrefix)
+		Do ..InorderTraversal(pExpr.Right, pCtx, .finalTokenPrefix)
+	} ElseIf cls = "Auwais.FHIRPath.Expr.IdentExpr" {
+		Set finalTokenPrefix = pExpr.Name
+		Do pCtx.AdvanceContext(finalTokenPrefix)
+	} ElseIf cls = "Auwais.FHIRPath.Expr.PartialExpr" {
+		Set finalTokenPrefix = ""
+		#; Do pCtx.AdvanceContext(pExpr.Value)
+	} ElseIf cls = "Auwais.FHIRPath.Expr.CallExpr" {
+		Do ..InorderTraversal(pExpr.Args.GetAt(pExpr.Args.Size), pCtx, .finalTokenPrefix)
+	} Else {
+		Throw ##class(%Exception.General).%New("Unable to handle class " _cls)
+	}
+
+	Quit
+}
+
 Method Suggest(pExpression As %String) As %ListOfDataTypes
 {
 	/// First, locate the resource type.
@@ -52,9 +78,42 @@ Method Suggest(pExpression As %String) As %ListOfDataTypes
 
 	/// Check if this resource exists
 	Set pathList = ##class(%ListOfDataTypes).%New()
-	Do ..SearchPaths(..Resource, pExpression, .pathList)
 
-	Return pathList
+	Set ctx = ##class(Auwais.FHIRPath.FHIRContextHelper).BuildResourceContext(..Resource)
+	
+	Set ast = ##class(Auwais.FHIRPath.Parser).ParseString(pExpression)
+	Do ..InorderTraversal(ast, ctx, .lastTokenFilter)
+	#; Write "LastTokenFilter="_lastTokenFilter,!
+
+	Set propertyList = ctx.GetPropertyList()
+	Set fnList = ctx.GetFunctionsList()
+
+	Set filteredList = ##class(%ListOfDataTypes).%New()
+	#; Write "lasttoken=" _ lastTokenFilter,!,!
+	
+	/// Filter 
+	For i=1:1:propertyList.Size {
+		If ($EXTRACT(propertyList.GetAt(i), 1, $L(lastTokenFilter)) = lastTokenFilter) {
+			Do filteredList.Insert(propertyList.GetAt(i) _ ".")
+		}
+	}
+
+	For i=1:1:fnList.Size {
+		If ($EXTRACT(fnList.GetAt(i), 1, $L(lastTokenFilter)) = lastTokenFilter) {
+			Do filteredList.Insert(fnList.GetAt(i) _ "(")
+		}
+	}
+	
+	Return filteredList
+}
+
+ClassMethod Test(pExpr)
+{
+	Set a = ##class(Auwais.FHIRPath.Autocomplete).%New()
+	Set l = a.Suggest(pExpr)
+	For i=1:1:l.Size {
+		Write l.GetAt(i),!
+	}
 }
 
 }

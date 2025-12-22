@@ -49,10 +49,10 @@ Method ParseExpression(pRBP As %Integer) As Auwais.FHIRPath.Expr.Expression
 	Return left
 }
 
-ClassMethod Test()
+ClassMethod ParseString(pInput As %String) As Auwais.FHIRPath.Parser
 {
-	Set input = "Patient.telecome.where(us"
-	Set tokenStream = ##class(Auwais.FHIRPath.TokenStream).%New(input)
+	Set tokenStream = ##class(Auwais.FHIRPath.TokenStream).%New(pInput)
+
 	Set parser = ##class(Auwais.FHIRPath.Parser).%New(tokenStream)
 
 	Do parser.RegisterPrefix("NUMBER", ##class(Auwais.FHIRPath.Parselet.NumberParselet).%New())
@@ -67,6 +67,14 @@ ClassMethod Test()
 	Do parser.RegisterInfix("LPAREN", ##class(Auwais.FHIRPath.Parselet.CallParselet).%New(110))
 	Do parser.RegisterInfix("EQUALS", ##class(Auwais.FHIRPath.Parselet.BinaryOpParselet).%New("EQUALS", 105))
 	Do parser.RegisterInfix("LOGIC_AND", ##class(Auwais.FHIRPath.Parselet.BinaryOpParselet).%New("LOGIC_AND", 108))
+
+	Return parser.ParseExpression(0)
+}
+
+ClassMethod Test()
+{
+	Set input = "Patient.telecome.where(us"
+	Set parser = ..ParseString(input)
 
 	Set expr = parser.ParseExpression(0)
 	Return expr
