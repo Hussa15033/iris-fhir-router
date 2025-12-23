@@ -67,12 +67,42 @@ Method Reset()
 Method AdvanceContext(pNextField As %String) As %Boolean
 {
 	/// Switch the FHIR context helper to the context
-	/// specified by pPath
+	/// specified by pNextField
 	Set nextType = ..Fields.GetAt(pNextField)
 	Quit:nextType="" 0
 
 	Set tRS = ##class(%SQL.Statement).%ExecDirect(,"SELECT * FROM HS_FHIRMeta_Storage.Rsrc WHERE coreVersion=? AND %UPPER(id)=? AND resourceType='StructureDefinition'", "4.0.1", $ZCVT(nextType, "U"))
 	Quit:tRS.%Next()=0 0
+	
+	/// Loop through all fields to find any that are "hanging"
+	/// Hanging fields are those specified in the path of a StructureDefinition
+	/// but are subproperties of another field
+	/// e.g. within a Patient resource we have:
+	/// Patient.contact
+	/// Patient.contact.address
+	/// Patient.contact.gender
+	/// The .address and .gender are considered "hanging"
+	Set hangingFields = ##class(%ArrayOfDataTypes).%New()
+	Set collectionHangingFields = ##class(%ListOfDataTypes).%New()
+	Set nKey = ..Fields.Next("")
+	While nKey '= "" {
+		Set part = $LISTFROMSTRING(nKey, ".")
+		If ($LG(part, 1) = pNextField) {
+			If ($LL(part) > 2) {
+				Throw ##class(%Exception.General).%New("More than 1 hanging field found","-30344",,)
+			} ElseIf ($LL(part) = 2) {
+				/// The 2nd element is hanging
+				#; Write "Set hanging field " _ ..Fields.GetAt(nKey)
+				Do hangingFields.SetAt(..Fields.GetAt(nKey), $LG(part, 2))
+
+				If (..CollectionFields.Find(nKey, "") '= "") {
+					Do collectionHangingFields.Insert($LG(part, 2))
+				}
+			}
+		}
+
+		Set nKey = ..Fields.Next(nKey)
+	}
 
 	Set ..IsCollection = 0
 	If (..CollectionFields.Find(pNextField) '= "") {
@@ -81,6 +111,14 @@ Method AdvanceContext(pNextField As %String) As %Boolean
 
 	Set sd = {}.%FromJSON(tRS.%Get("json"))
 	Do ..LoadContext(sd)
+
+	/// Copy all hanging fields into the current context
+	Set cKey = hangingFields.Next("")
+	While cKey '= "" {
+		Do ..Fields.SetAt(hangingFields.GetAt(cKey), cKey)
+		Do:collectionHangingFields.Find(cKey,"")'="" ..CollectionFields.Insert(cKey)
+		Set cKey = hangingFields.Next(cKey)
+	}
 	Return 1
 }
 
@@ -115,7 +153,7 @@ Method GetFunctionsList() As %ListOfDataTypes
 	If (..CurrentContext.kind = "primitive-type") {
 		Set type = ..CurrentContext.type
 
-		If (type = "string") {
+		If (type = "string") || (type = "code") {
 			Do fns.Insert("substring")
 			Do fns.Insert("startsWith")
 			Do fns.Insert("endsWith")
