@@ -45,7 +45,7 @@ Method SearchPaths(pResourceType As %String, pSearchTerm As %String, ByRef paths
 	}
 }
 
-Method InorderTraversal(pExpr As Auwais.FHIRPath.Expr.Expression, pCtx As Auwais.FHIRPath.FHIRContextHelper, ByRef finalTokenPrefix)
+Method InorderTraversal(pExpr As Auwais.FHIRPath.Expr.Expression, pCtx As Auwais.FHIRPath.FHIRContextHelper, ByRef finalTokenPrefix, ByRef refWithinFunctionCall = 0, withinFunctionCall = 0)
 {
 	/// Reach a leaf node
 	If (pExpr = "") {
@@ -54,16 +54,18 @@ Method InorderTraversal(pExpr As Auwais.FHIRPath.Expr.Expression, pCtx As Auwais
 
 	Set cls = $CLASSNAME(pExpr)
 	If cls = "Auwais.FHIRPath.Expr.BinaryExpr" {
-		Do ..InorderTraversal(pExpr.Left, pCtx, .finalTokenPrefix)
-		Do ..InorderTraversal(pExpr.Right, pCtx, .finalTokenPrefix)
+		Do ..InorderTraversal(pExpr.Left, pCtx, .finalTokenPrefix, .refWithinFunctionCall, withinFunctionCall)
+		Do ..InorderTraversal(pExpr.Right, pCtx, .finalTokenPrefix, .refWithinFunctionCall, withinFunctionCall)
 	} ElseIf cls = "Auwais.FHIRPath.Expr.IdentExpr" {
 		Set finalTokenPrefix = pExpr.Name
+		Set refWithinFunctionCall = withinFunctionCall
 		Do pCtx.AdvanceContext(finalTokenPrefix)
 	} ElseIf cls = "Auwais.FHIRPath.Expr.PartialExpr" {
+		Set refWithinFunctionCall = withinFunctionCall
 		Set finalTokenPrefix = ""
 		#; Do pCtx.AdvanceContext(pExpr.Value)
 	} ElseIf cls = "Auwais.FHIRPath.Expr.CallExpr" {
-		Do ..InorderTraversal(pExpr.Args.GetAt(pExpr.Args.Size), pCtx, .finalTokenPrefix)
+		Do ..InorderTraversal(pExpr.Args.GetAt(pExpr.Args.Size), pCtx, .finalTokenPrefix, .refWithinFunctionCall, 1)
 	} Else {
 		Throw ##class(%Exception.General).%New("Unable to handle class " _cls)
 	}
@@ -82,7 +84,7 @@ Method Suggest(pExpression As %String) As %ListOfDataTypes
 	Set ctx = ##class(Auwais.FHIRPath.FHIRContextHelper).BuildResourceContext(..Resource)
 	
 	Set ast = ##class(Auwais.FHIRPath.Parser).ParseString(pExpression)
-	Do ..InorderTraversal(ast, ctx, .lastTokenFilter)
+	Do ..InorderTraversal(ast, ctx, .lastTokenFilter, .withinFnCall)
 	#; Write "LastTokenFilter="_lastTokenFilter,!
 
 	Set propertyList = ctx.GetPropertyList()
@@ -91,14 +93,17 @@ Method Suggest(pExpression As %String) As %ListOfDataTypes
 	Set filteredList = ##class(%ListOfDataTypes).%New()
 	#; Write "lasttoken=" _ lastTokenFilter,!,!
 	
+	Set suffix = ""
+	Set:withinFnCall=0 suffix = "."
 	/// Filter 
 	For i=1:1:propertyList.Size {
 		If ($EXTRACT(propertyList.GetAt(i), 1, $L(lastTokenFilter)) = lastTokenFilter) {
-			Do filteredList.Insert(propertyList.GetAt(i) _ ".")
+			Do filteredList.Insert(propertyList.GetAt(i) _ suffix)
 		}
 	}
 
 	For i=1:1:fnList.Size {
+		Continue:withinFnCall
 		If ($EXTRACT(fnList.GetAt(i), 1, $L(lastTokenFilter)) = lastTokenFilter) {
 			Do filteredList.Insert(fnList.GetAt(i) _ "(")
 		}
