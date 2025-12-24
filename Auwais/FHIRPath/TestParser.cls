@@ -9,10 +9,14 @@ ClassMethod RunOneTest(pI, pSearchTerm, pSuggestion) As %Boolean
 {
 		Write "Running test " _ pI _ "(" _ pSearchTerm _ ")"
 		/// Run a search term and ensure pSuggestion is in the list of suggestions returned
-		Set autocomplete = ##class(Auwais.FHIRPath.Autocomplete).%New()
-		Set suggestionList = autocomplete.Suggest(pSearchTerm)
+		Try {
+			Set autocomplete = ##class(Auwais.FHIRPath.Autocomplete).%New()
+			Set suggestionList = autocomplete.Suggest(pSearchTerm)
 
-		Set success = suggestionList.Find(pSuggestion) '= ""
+			Set success = suggestionList.Find(pSuggestion) '= ""
+		} Catch ex {
+			Set success = ""
+		}
 
 		If (success) {
 			Write " - Success",!
@@ -40,6 +44,8 @@ ClassMethod Test()
 	Do ..RunOneTest(13, "Patient.telecom.where(system='phone' and use='mobile').", "first()")
 	Do ..RunOneTest(14, "Patient.telecom.where(system='phone' and use='mobile').", "last()")
 	Do ..RunOneTest(15, "Patient.telecom.where(system='phone' and use='mobile').first().", "value.")
+	Do ..RunOneTest(16, "Practitioner.nam", "name[")
+	Do ..RunOneTest(17, "Practitioner.nam", "name.")
 }
 
 }

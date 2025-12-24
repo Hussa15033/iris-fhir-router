@@ -66,6 +66,8 @@ Method InorderTraversal(pExpr As Auwais.FHIRPath.Expr.Expression, pCtx As Auwais
 		#; Do pCtx.AdvanceContext(pExpr.Value)
 	} ElseIf cls = "Auwais.FHIRPath.Expr.CallExpr" {
 		Do ..InorderTraversal(pExpr.Args.GetAt(pExpr.Args.Size), pCtx, .finalTokenPrefix, .refWithinFunctionCall, 1)
+	} ElseIf cls = "Auwais.FHIRPath.Expr.IndexExpr" {
+		Do ..InorderTraversal(pExpr.Field, pCtx, .finalTokenPrefix, .refWithinFunctionCall, withinFunctionCall)
 	} Else {
 		Throw ##class(%Exception.General).%New("Unable to handle class " _cls)
 	}
@@ -95,10 +97,12 @@ Method Suggest(pExpression As %String) As %ListOfDataTypes
 	
 	Set suffix = ""
 	Set:withinFnCall=0 suffix = "."
+	
 	/// Filter 
 	For i=1:1:propertyList.Size {
 		If ($EXTRACT(propertyList.GetAt(i), 1, $L(lastTokenFilter)) = lastTokenFilter) {
 			Do filteredList.Insert(propertyList.GetAt(i) _ suffix)
+			Do:ctx.CollectionFields.Find(propertyList.GetAt(i))'="" filteredList.Insert(propertyList.GetAt(i) _ "[")
 		}
 	}
 

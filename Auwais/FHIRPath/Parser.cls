@@ -26,6 +26,7 @@ Method ParseExpression(pRBP As %Integer) As Auwais.FHIRPath.Expr.Expression
 	Set t1 = ..Consume()
 	#; Write "Consumed " _ t1.Type _ ":" _ t1.Lexeme _ ":" _ t1.Literal,!
 	#dim nud As Auwais.FHIRPath.Parselet.Prefix
+
 	Set nud = ..Prefix.GetAt(t1.Type)
 
 	If (t1.Type = "EOF") {
@@ -67,6 +68,7 @@ ClassMethod ParseString(pInput As %String) As Auwais.FHIRPath.Parser
 	Do parser.RegisterInfix("LPAREN", ##class(Auwais.FHIRPath.Parselet.CallParselet).%New(110))
 	Do parser.RegisterInfix("EQUALS", ##class(Auwais.FHIRPath.Parselet.BinaryOpParselet).%New("EQUALS", 105))
 	Do parser.RegisterInfix("LOGIC_AND", ##class(Auwais.FHIRPath.Parselet.BinaryOpParselet).%New("LOGIC_AND", 108))
+	Do parser.RegisterInfix("LSQRBRACKET", ##class(Auwais.FHIRPath.Parselet.IndexParselet).%New(120))
 
 	Return parser.ParseExpression(0)
 }
