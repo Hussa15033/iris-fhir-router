@@ -141,6 +141,7 @@ Method GetFunctionsList() As %ListOfDataTypes
 	If ..IsCollection {
 		/// Add collection functions
 		Do fns.Insert("where")
+		Do fns.Insert("descendants")
 		Do fns.Insert("exists")
 		Do fns.Insert("empty")
 		Do fns.Insert("first")
