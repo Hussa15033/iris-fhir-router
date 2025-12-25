@@ -3,9 +3,8 @@ Class Auwais.FHIRPath.Parselet.BinaryOpParselet Extends Infix
 
 Property Op As %String;
 
-Method %OnNew(pOp As %String, pPrecedence As %Integer) As %Status
+Method %OnNew(pPrecedence As %Integer) As %Status
 {
-	Set ..Op = pOp
 	Set ..Precedence = pPrecedence
 	Quit $$$OK
 }
@@ -13,7 +12,7 @@ Method %OnNew(pOp As %String, pPrecedence As %Integer) As %Status
 Method Parse(pParser As Auwais.FHIRPath.Parser, pLeft As Auwais.FHIRPath.Expr.Expression, pToken As Auwais.FHIRPath.Tokens.Token)
 {
 	Set right = pParser.Parse(..Precedence())
-	Return ##class(Auwais.FHIRPath.Expr.BinaryExpr).%New(pLeft, ..Op, right)
+	Return ##class(Auwais.FHIRPath.Expr.BinaryExpr).%New(pLeft, pToken.Literal, right)
 }
 
 }
