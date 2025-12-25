@@ -3,12 +3,12 @@ Class Auwais.FHIRPath.Expr.UnaryExpr Extends Expression
 
 Property Op As %String;
 
-Property pRight As Expression;
+Property Expr As Expression;
 
 Method %OnNew(pOp As %String, pRight As Expression) As %Status
 {
 	Set ..Op = pOp
-	Set ..pRight = pRight
+	Set ..Expr = pRight
 	Return $$$OK
 }
 

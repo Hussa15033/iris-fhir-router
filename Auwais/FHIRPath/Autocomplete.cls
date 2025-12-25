@@ -68,6 +68,9 @@ Method InorderTraversal(pExpr As Auwais.FHIRPath.Expr.Expression, pCtx As Auwais
 		Do ..InorderTraversal(pExpr.Args.GetAt(pExpr.Args.Size), pCtx, .finalTokenPrefix, .refWithinFunctionCall, 1)
 	} ElseIf cls = "Auwais.FHIRPath.Expr.IndexExpr" {
 		Do ..InorderTraversal(pExpr.Field, pCtx, .finalTokenPrefix, .refWithinFunctionCall, withinFunctionCall)
+	} ElseIf (cls = "Auwais.FHIRPath.Expr.NumberExpr") || (cls = "Auwais.FHIRPath.Expr.DecimalExpr") {
+	} ElseIf cls = "Auwais.FHIRPath.Expr.UnaryExpr" { 
+		Do ..InorderTraversal(pExpr.Expr, pCtx, .finalTokenPrefix, .refWithinFunctionCall, withinFunctionCall)
 	} Else {
 		Throw ##class(%Exception.General).%New("Unable to handle class " _cls)
 	}
@@ -103,11 +106,8 @@ Method Suggest(pExpression As %String) As %ListOfDataTypes
 		If ($EXTRACT(propertyList.GetAt(i), 1, $L(lastTokenFilter)) = lastTokenFilter) {
 			Do filteredList.Insert(propertyList.GetAt(i) _ suffix)
 			Do:ctx.CollectionFields.Find(propertyList.GetAt(i))'="" filteredList.Insert(propertyList.GetAt(i) _ "[")
+			Do:propertyList.GetAt(i)="extension" filteredList.Insert("extension(")
 		}
-	}
-
-	If (propertyList.Find("extension", "") '= "") {
-		Do filteredList.Insert("extension(")
 	}
 
 	For i=1:1:fnList.Size {
