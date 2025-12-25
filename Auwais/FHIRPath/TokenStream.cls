@@ -16,7 +16,23 @@ Method %OnNew(pInput As %String) As %Status
 		#dim token As HS.FHIRPath.Token
 		Set token = output(i)
 		If token.opName '= "" {
-			Set opType = $CASE(token.opName, ".":"DOT", "=":"EQUALS", "and":"LOGIC_AND", ")":"RPAREN", "+":"PLUS", "-":"MINUS", "*":"STAR", "/":"SLASH", "EOT":"EOF", "]":"RSQRBRACKET", :"")
+			Set opType = $CASE(token.opName,
+			".":"DOT",
+			"=":"EQUALS",
+			"and":"LOGIC_AND",
+			"or":"LOGIC_OR",
+			"<":"LT",
+			"<=":"LTE",
+			">":"GT",
+			">=":"GTE",
+			")":"RPAREN",
+			"+":"PLUS",
+			"-":"MINUS",
+			"*":"STAR",
+			"/":"SLASH",
+			"]":"RSQRBRACKET",
+			"EOT":"EOF",
+			:"")
 			Throw:opType="" ##class(%Exception.General).%New("No matching token for operator","-303282",,"Cannot handle operator '" _token.opName_"'")
 			Set t1 = ##class(Auwais.FHIRPath.Tokens.Token).%New(opType,,token.opName)
 		} ElseIf (token.idName = "(") {
