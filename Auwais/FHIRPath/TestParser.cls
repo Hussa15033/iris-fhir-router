@@ -80,6 +80,10 @@ ClassMethod Test()
 	Do ..RunOneTest(49, "Patient.telecom.where(1 > -1).first()", "")
 	Do ..RunOneTest(50, "Patient.telecom.where(1 and 1).first()", "")
 	Do ..RunOneTest(51, "Patient.telecom.where(1 or 0).first()", "")
+	Do ..RunOneTest(52, "Practitioner.name[1].family != 'Smith'", "")
+	Do ..RunOneTest(53, "Practitioner.name.family | Pra", "Practitioner")
+	Do ..RunOneTest(54, "true and fal", "false")
+	Do ..RunOneTest(55, "Practitioner.name[0].family = 'Cooper'", "")
 }
 
 }

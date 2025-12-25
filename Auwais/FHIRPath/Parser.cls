@@ -50,12 +50,15 @@ Method ParseExpression(pRBP As %Integer) As Auwais.FHIRPath.Expr.Expression
 	Return left
 }
 
+/// TODO: Separate Parser from FHIRPath syntax, Parse should be a modular component that can be used on its own
 ClassMethod ParseString(pInput As %String) As Auwais.FHIRPath.Parser
 {
 	Set tokenStream = ##class(Auwais.FHIRPath.TokenStream).%New(pInput)
 
 	Set parser = ##class(Auwais.FHIRPath.Parser).%New(tokenStream)
 
+	/// TODO: Add operator precedence according to the FHIRPath docs
+	/// https://hl7.org/fhirpath/#operator-precedence
 	Do parser.RegisterPrefix("NUMBER", ##class(Auwais.FHIRPath.Parselet.NumberParselet).%New())
 	Do parser.RegisterPrefix("IDENT", ##class(Auwais.FHIRPath.Parselet.IdentParselet).%New())
 	Do parser.RegisterPrefix("LPAREN", ##class(Auwais.FHIRPath.Parselet.GroupParselet).%New())
