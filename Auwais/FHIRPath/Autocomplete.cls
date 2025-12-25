@@ -106,6 +106,10 @@ Method Suggest(pExpression As %String) As %ListOfDataTypes
 		}
 	}
 
+	If (propertyList.Find("extension", "") '= "") {
+		Do filteredList.Insert("extension(")
+	}
+
 	For i=1:1:fnList.Size {
 		Continue:withinFnCall
 		If ($EXTRACT(fnList.GetAt(i), 1, $L(lastTokenFilter)) = lastTokenFilter) {

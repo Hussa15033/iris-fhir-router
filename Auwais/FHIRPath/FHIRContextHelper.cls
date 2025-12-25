@@ -149,6 +149,7 @@ Method GetFunctionsList() As %ListOfDataTypes
 		Do fns.Insert("skip")
 		Do fns.Insert("tail")
 		Do fns.Insert("take")
+		Do fns.Insert("hasExtension")
 	}
 
 	If (..CurrentContext.kind = "primitive-type") {
@@ -158,6 +159,7 @@ Method GetFunctionsList() As %ListOfDataTypes
 			Do fns.Insert("substring")
 			Do fns.Insert("startsWith")
 			Do fns.Insert("endsWith")
+			Do fns.Insert("indexOf")
 		} ElseIf (type = "date") {
 			/// No supported date/time functions
 		} Else {
