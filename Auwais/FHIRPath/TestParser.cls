@@ -29,6 +29,8 @@ ClassMethod RunOneTest(pI, pSearchTerm, pSuggestion) As %Boolean
 
 ClassMethod Test()
 {
+	Do ..RunOneTest(56, "Pat", "Patient.")
+	Do ..RunOneTest(57, "Pa", "Parameter.")
 	Do ..RunOneTest(1, "Patient.", "name.")
 	Do ..RunOneTest(2, "Patient.", "telecom.")
 	Do ..RunOneTest(3, "Patient.na", "name.")
