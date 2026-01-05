@@ -26,7 +26,10 @@ ClassMethod GetQueryData(ByRef pArray, pParam) As %String
 	Set tVal=""
 	Try {
 		If pParam="FHIRVersion" {
-			Set tVal = tVal _ ",4.0.1"
+			Set tRS = ##class(%SQL.Statement).%ExecDirect(,"SELECT DISTINCT coreVersion FROM HS_FHIRMeta_Storage.Rsrc")
+			While tRS.%Next() {
+				Set tVal = tVal _ "," _ tRS.%Get("coreVersion")
+			}
 		} ElseIf pParam="resourceFilter" {
 			Set tResourceVersion = $G(pArray("FHIRVersion"))
 			Quit:tResourceVersion=""
