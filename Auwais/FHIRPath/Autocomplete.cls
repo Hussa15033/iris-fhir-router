@@ -7,12 +7,15 @@ Class Auwais.FHIRPath.Autocomplete Extends %RegisteredObject
 
 Property Resource As %String;
 
+Property ValidResources As %String;
+
 Property FHIRVersion As %String [ InitialExpression = "4.0.1" ];
 
 Property Paths As %ListOfDataTypes;
 
-Method %OnNew() As %Status
+Method %OnNew(pValidResources = "") As %Status
 {
+	Set ..ValidResources = pValidResources
 	Quit $$$OK
 }
 
@@ -82,6 +85,25 @@ Method Suggest(pExpression As %String) As %ListOfDataTypes
 {
 	/// First, locate the resource type.
 	Set ..Resource = $PIECE(pExpression, ".")
+
+	Set valid = $LISTFROMSTRING(..ValidResources, ",")
+	Set suggestedResources = ##class(%ListOfDataTypes).%New()
+
+	/// Check if this resource is valid
+	Set tRS = ##class(%SQL.Statement).%ExecDirect(,"SELECT * FROM HS_FHIRMeta_Storage.Rsrc WHERE coreVersion=? AND id=type AND kind='resource' AND %UPPER(id) LIKE ?", "4.0.1", $ZCVT(..Resource, "U") _ "%")
+
+	While tRS.%Next() '= 0 {
+		If (..Resource = tRS.%Get("id")) {
+			/// Full match found
+			Do suggestedResources.Clear()
+			Break
+		} Else {
+			Do:(..ValidResources="")||($LF(valid, tRS.%Get("id"))'=0) suggestedResources.Insert(tRS.%Get("id") _ ".")
+		}
+	}
+
+	Return:suggestedResources.Size>0 suggestedResources
+
 
 	/// Check if this resource exists
 	Set pathList = ##class(%ListOfDataTypes).%New()
