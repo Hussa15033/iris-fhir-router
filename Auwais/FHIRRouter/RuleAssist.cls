@@ -3,7 +3,7 @@ Class Auwais.FHIRRouter.RuleAssist Extends EnsLib.MsgRouter.RuleAssist
 
 ClassMethod GetMetaData() As %String
 {
-	Quit "source:Source:#configname,FHIRVersion:FHIR Version:#query,resourceList:Resource Filter:commalist#query"
+	Quit "source:Source:#configname,FHIRVersion:FHIR Version:#query,resourceFilter:Resource Filter:#query"
 }
 
 ClassMethod GetDescription() As %String
@@ -27,7 +27,7 @@ ClassMethod GetQueryData(ByRef pArray, pParam) As %String
 	Try {
 		If pParam="FHIRVersion" {
 			Set tVal = tVal _ ",4.0.1"
-		} ElseIf pParam="resourceList" {
+		} ElseIf pParam="resourceFilter" {
 			Set tResourceVersion = $G(pArray("FHIRVersion"))
 			Quit:tResourceVersion=""
 
