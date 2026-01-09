@@ -12,7 +12,7 @@ ClassMethod correlateByObj(pObjClass As %Dictionary.ClassDefinition, Output pRul
 		; open the reader and correlate the XData to Ens.Rule.Model.ruleDefinition
 		set tReader = ##class(%XML.Reader).%New()
 		set tSC=tReader.OpenStream(tObjXData.Data) quit:$$$ISERR(tSC)
-		do tReader.Correlate("ruleDefinition","Auwais.FHIRRouter.Model.ruleDefinition")
+		do tReader.Correlate("ruleDefinition","Ens.Rule.Model.ruleDefinition")
 		; find the first object
 		do tReader.Next(.pRuleDefinition,.tSC) quit:$$$ISERR(tSC)
 		if $isObject($get(pRuleDefinition)) set pRuleDefinition.Timestamp = $zdatetime(pObjClass.TimeChanged,3,,6)
@@ -29,7 +29,7 @@ ClassMethod generateOneAction(pClassname As %String, variables As %String, pActi
 	try {
 		if ( pAction.type = "assign" ) {
 			/// Override the value of the expression to be an objectscript call to the FHIRPath evaluator
-			do ..generateFHIRPathEval(pAction.value, .tValueExpression, 1, pLevel)
+			do ..generateFHIRPathEval(pAction.value, .tValueExpression, 0, pLevel)
 			#; set tSC=##class(Ens.Rule.Model.expression).convertToCOS(pAction.value,.tValueExpression,.variables) quit:$$$ISERR(tSC)
 			set tSC = ##class(Ens.Rule.Model.expression).convertToCOS(pAction.property, .tVProp,.variables,1) quit:$$$ISERR(tSC)
 			if tVProp["SetValueAt" {
@@ -51,28 +51,6 @@ ClassMethod generateOneAction(pClassname As %String, variables As %String, pActi
 			do ..generateFHIRPathEval(pAction.value, .tExpression, 0, pLevel)
 			#; set tSC=##class(Ens.Rule.Model.expression).convertToCOS(pAction.value,.tExpression,.variables) quit:$$$ISERR(tSC)
 			do ..line("do ##class(Ens.Util.Trace).WriteTrace(""user"",$$$CurrentClass,$$$CurrentMethod,"_tExpression_")",pLevel)
-		} elseif ( pAction.type = "send" ) {
-			for r=1:1:$l(pAction.target,",") {
-				Set oneTarget=$ZStrip($P(pAction.target,",",r),"<>W")
-				If ""=oneTarget Continue
-				If (($f(oneTarget,"""_")'=0) && ($f(oneTarget,"_""",$f(oneTarget,"""_"))'=0)) {
-					set tSC = $$$ERROR($$$EnsErrGeneral,"Invalid target name: "_oneTarget_". Target name should not contain ""_ and _""")
-					quit
-				}
-				Try {
-					Set ^Ens.Rule.Targets(pClassname,oneTarget)=""
-				} Catch { /* Might be RO Mirror Member */ }
-			}
-			if $$$ISERR(tSC) quit
-			for t=1:1:$l(pAction.transform,",") {
-				set tTransform = $zstrip($p(pAction.transform,",",t),"<>W")
-				if ((tTransform '= "") && ('$zname(tTransform,4))) {
-					set tSC = $$$ERROR($$$EnsErrGeneral,"Invalid data transformation name: '"_tTransform_"'")
-					quit
-				}
-			}
-			if $$$ISERR(tSC) quit
-			do ..writeReturnForSend(pAction, pLevel)
 		} elseif ( pAction.type = "debug" ) {
 			do ..generateFHIRPathEval(pAction.value, .tExpression, 0, pLevel)
 			#; set tSC=##class(Ens.Rule.Model.expression).convertToCOS(pAction.value,.tExpression,.variables) quit:$$$ISERR(tSC)
@@ -87,22 +65,24 @@ ClassMethod generateOneAction(pClassname As %String, variables As %String, pActi
 	quit tSC
 }
 
-ClassMethod generateFHIRPathEval(pExpression As %String, Output pValue As %String, pForceValue As %Boolean, pLevel)
+ClassMethod generateFHIRPathEval(pExpression As %String, Output pValue As %String, pForceBoolean As %Boolean, pLevel)
 {
 	/// todo: Add a FHIRpath parser check here BEFORE evaluating
 	do ..line("set fAPI = ##class(HS.FHIRPath.API).getInstance($lb(""hl7.fhir.r4.core@4.0.1""))", pLevel)
 	do ..line("set fExpr = """ _ $REPLACE(pExpression, """", """""") _ """")
+	do ..line("$$$TRACE(""Evaluating expression""_fExpr)")
 	do ..line("set fTree = fAPI.parse(fExpr)", pLevel)
-	do ..line("set fVal = fAPI.evaluate(pContext.Document, fTree, .fOutput)", pLevel)
+	do ..line("$$$TRACE(""Trace: ""_pContext.FHIRJSON.%ToJSON())")
+	do ..line("Do fAPI.evaluate(pContext.FHIRJSON, fTree, .fOutput)", pLevel)
+	do ..line("$$$TRACE(""Value of fOutput:""_fOutput)")
 
-	If (pForceValue) {
-		/// We expect the output from the FHIRPath eval to be a value
+	If (pForceBoolean) {
+		/// We expect the output from the FHIRPath eval to be a boolean (e.g. for a condition)
 		/// todo: Add a FHIRPath collection check if we expect a single value, as the FHIRPath expression should evaluate to a value
 		/// however if a bool is expected, then as long as the expression has values, it will succeed
-		do ..line("set tVal = 0", pLevel)
+		do ..line("set tVal = (fOutput > 0)", pLevel)
 	} Else {
-		do ..line("set tVal = fVal", pLevel)
-		do ..line("set:tVal>1 tVal = 1", pLevel)
+		do ..line("set tVal = $CASE(fOutput, 1:fOutput(1),:fOutput)", pLevel)
 	}
 	set pValue = "tVal"
 }
@@ -114,8 +94,9 @@ ClassMethod generateWhens(pClassname As %String, variables As %String, pAction A
 		If $case(pAction.type,"rule":1,"foreach":1,:0) {
 			for tIndex=1:1:pAction.whens.Count() {
 				set tWhen = pAction.whens.GetAt(tIndex)
-				do ..generateFHIRPathEval(tWhen.condition, .tExpression, pLevel)
+				do ..generateFHIRPathEval(tWhen.condition, .tExpression, 0, pLevel)
 				#; set tSC=##class(Ens.Rule.Model.expression).convertToCOS(tWhen.condition,.tExpression,.variables) quit:$$$ISERR(tSC)
+
 				do ..line($s(tIndex=1:"if",1:"} elseif")_" ("_tExpression_") {",pLevel)
 				set tReason = pReason_":when#"_tIndex
 				do ..line("set pReason=pReason_"","_tReason_"""",pLevel+1)
@@ -167,6 +148,8 @@ ClassMethod generateLoop(pClassname As %String, variables As %String, pAction As
 		}
 		
 		#; Just to make sure there's no code being injected
+		/// Todo: Check we are looping over the expression properly
+		Throw $$$NotImplemented
 		Set tSC = ##class(Ens.Rule.Model.expression).parseExpression(pAction.propertypath,.tExpressionObj)	Quit:$$$ISERR(tSC)
 		
 		If tExpressionObj.type="value" {
