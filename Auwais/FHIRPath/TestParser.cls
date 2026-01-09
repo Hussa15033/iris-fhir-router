@@ -8,6 +8,7 @@ Class Auwais.FHIRPath.TestParser Extends %RegisteredObject
 ClassMethod RunOneTest(pI, pSearchTerm, pSuggestion) As %Boolean
 {
 		Write "Running test " _ pI _ "(" _ pSearchTerm _ ")"
+		Set ^AFPTests = ^AFPTests + 1
 		/// Run a search term and ensure pSuggestion is in the list of suggestions returned
 		Try {
 			Set autocomplete = ##class(Auwais.FHIRPath.Autocomplete).%New()
@@ -19,6 +20,7 @@ ClassMethod RunOneTest(pI, pSearchTerm, pSuggestion) As %Boolean
 		}
 
 		If (success) {
+			Set ^AFPTestsSuccess = ^AFPTestsSuccess + 1
 			Write " - Success",!
 			Return 1
 		} Else {
@@ -29,6 +31,11 @@ ClassMethod RunOneTest(pI, pSearchTerm, pSuggestion) As %Boolean
 
 ClassMethod Test()
 {
+	
+	Kill ^AFPTests
+	Kill ^AFPTestsSuccess
+	Set ^AFPTests = 0
+	Set ^AFPTestsSuccess = 0
 	Do ..RunOneTest(56, "Pat", "Patient.")
 	Do ..RunOneTest(57, "Pa", "Parameter.")
 	Do ..RunOneTest(1, "Patient.", "name.")
@@ -86,6 +93,8 @@ ClassMethod Test()
 	Do ..RunOneTest(53, "Practitioner.name.family | Pra", "Practitioner")
 	Do ..RunOneTest(54, "true and fal", "false")
 	Do ..RunOneTest(55, "Practitioner.name[0].family = 'Cooper'", "")
+	Set percentPassed = $NUMBER((^AFPTestsSuccess / ^AFPTests) * 100, 1)
+	Write !,"Tests passed: " _ ^AFPTestsSuccess _ " / " _ ^AFPTests _ "(" _ percentPassed _ "%)",!
 }
 
 }

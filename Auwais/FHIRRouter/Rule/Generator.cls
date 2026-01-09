@@ -68,6 +68,7 @@ ClassMethod generateOneAction(pClassname As %String, variables As %String, pActi
 ClassMethod generateFHIRPathEval(pExpression As %String, Output pValue As %String, pForceBoolean As %Boolean, pLevel)
 {
 	/// todo: Add a FHIRpath parser check here BEFORE evaluating
+	/// todo: Handle error checking here too with precise error messages for use in the UI
 	do ..line("set fAPI = ##class(HS.FHIRPath.API).getInstance($lb(""hl7.fhir.r4.core@4.0.1""))", pLevel)
 	do ..line("set fExpr = """ _ $REPLACE(pExpression, """", """""") _ """")
 	do ..line("$$$TRACE(""Evaluating expression""_fExpr)")
