@@ -96,7 +96,7 @@ Method Suggest(pExpression As %String) As %ListOfDataTypes
 		If (..Resource = tRS.%Get("id")) {
 			/// Full match found
 			Do suggestedResources.Clear()
-			Break
+			Quit
 		} Else {
 			Do:(..ValidResources="")||($LF(valid, tRS.%Get("id"))'=0) suggestedResources.Insert(tRS.%Get("id") _ ".")
 		}
