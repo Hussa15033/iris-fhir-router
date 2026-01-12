@@ -29,7 +29,8 @@ ClassMethod generateOneAction(pClassname As %String, variables As %String, pActi
 	try {
 		if ( pAction.type = "assign" ) {
 			/// Override the value of the expression to be an objectscript call to the FHIRPath evaluator
-			do ..generateFHIRPathEval(pAction.value, .tValueExpression, 0, pLevel)
+			set tSC = ..generateFHIRPathEval(pAction.value, .tValueExpression, 0, pLevel)
+			return:'$$$ISOK(tSC) tSC
 			#; set tSC=##class(Ens.Rule.Model.expression).convertToCOS(pAction.value,.tValueExpression,.variables) quit:$$$ISERR(tSC)
 			set tSC = ##class(Ens.Rule.Model.expression).convertToCOS(pAction.property, .tVProp,.variables,1) quit:$$$ISERR(tSC)
 			if tVProp["SetValueAt" {
@@ -39,7 +40,9 @@ ClassMethod generateOneAction(pClassname As %String, variables As %String, pActi
 				do ..line("set "_tVProp_"="_tValueExpression,pLevel)
 			}
 		} elseif ( pAction.type = "return" ) {
-			do ..generateFHIRPathEval(pAction.value, .tExpression, 0, pLevel)
+			set tSC = ..generateFHIRPathEval(pAction.value, .tExpression, 0, pLevel)
+			return:'$$$ISOK(tSC) tSC
+
 			#; set tSC=##class(Ens.Rule.Model.expression).convertToCOS(pAction.value,.tExpression,.variables) quit:$$$ISERR(tSC)
 			do ..line("set tReturn = 1",pLevel)
 			if tExpression'="" {
@@ -48,11 +51,13 @@ ClassMethod generateOneAction(pClassname As %String, variables As %String, pActi
 				do ..line("quit",pLevel)
 			}
 		} elseif ( pAction.type = "trace" ) {
-			do ..generateFHIRPathEval(pAction.value, .tExpression, 0, pLevel)
+			set tSC = ..generateFHIRPathEval(pAction.value, .tExpression, 0, pLevel)
+			return:'$$$ISOK(tSC) tSC
 			#; set tSC=##class(Ens.Rule.Model.expression).convertToCOS(pAction.value,.tExpression,.variables) quit:$$$ISERR(tSC)
 			do ..line("do ##class(Ens.Util.Trace).WriteTrace(""user"",$$$CurrentClass,$$$CurrentMethod,"_tExpression_")",pLevel)
 		} elseif ( pAction.type = "debug" ) {
-			do ..generateFHIRPathEval(pAction.value, .tExpression, 0, pLevel)
+			set tSC = ..generateFHIRPathEval(pAction.value, .tExpression, 0, pLevel)
+			return:'$$$ISOK(tSC) tSC
 			#; set tSC=##class(Ens.Rule.Model.expression).convertToCOS(pAction.value,.tExpression,.variables) quit:$$$ISERR(tSC)
 			set tDebug = $select(pAction.value = tExpression: tExpression, 1: $$$quote(pAction.value) _ "_"" = '""_" _ tExpression _ "_""'""")
 			do ..line("if (pLogLevel [ $$$eRuleLogTypeUserDebug) set tSC = ##class(Ens.Rule.DebugLog).Log(pDebugId,$$$eRuleLogTypeUserDebug,"_$$$quote(pReason)_","_tDebug_",0) quit:$$$ISERR(tSC)",pLevel)
@@ -69,6 +74,19 @@ ClassMethod generateFHIRPathEval(pExpression As %String, Output pValue As %Strin
 {
 	/// todo: Add a FHIRpath parser check here BEFORE evaluating
 	/// todo: Handle error checking here too with precise error messages for use in the UI
+	
+	/// First we use the original FHIRPath evaluator to check if the expression is valid FHIRPath syntax-wise
+	Try {
+		Set fAPI = ##class(HS.FHIRPath.Parser).%New()
+		Set node = fAPI.parse(pExpression)
+	} Catch ex {
+		Return ex.AsStatus()
+	}
+
+
+	/// Next we use the custom parser to ensure the FHIRPath is semantically correct too
+	/// TODO: Use the custom parser and return an error status here if the FHIRPath syntax is not valid
+
 	do ..line("set fAPI = ##class(HS.FHIRPath.API).getInstance($lb(""hl7.fhir.r4.core@4.0.1""))", pLevel)
 	do ..line("set fExpr = """ _ $REPLACE(pExpression, """", "'") _ """")
 	#; do ..line("$$$TRACE(""Evaluating expression""_fExpr)")
@@ -89,6 +107,8 @@ ClassMethod generateFHIRPathEval(pExpression As %String, Output pValue As %Strin
 		do ..line("set tVal = $CASE(fOutput, 1:fOutput(1),:fOutput)", pLevel)
 	}
 	set pValue = "tVal"
+
+	Return $$$OK
 }
 
 ClassMethod generateWhens(pClassname As %String, variables As %String, pAction As Ens.Rule.Model.action, pReason As %String, pAssistClass As %String, %code As %Stream.MethodGenerator, pLevel As %Integer) As %Status
@@ -98,7 +118,8 @@ ClassMethod generateWhens(pClassname As %String, variables As %String, pAction A
 		If $case(pAction.type,"rule":1,"foreach":1,:0) {
 			for tIndex=1:1:pAction.whens.Count() {
 				set tWhen = pAction.whens.GetAt(tIndex)
-				do ..generateFHIRPathEval(tWhen.condition, .tExpression, 1, pLevel)
+				set tSC = ..generateFHIRPathEval(tWhen.condition, .tExpression, 1, pLevel)
+				return:'$$$ISOK(tSC) tSC
 				#; set tSC=##class(Ens.Rule.Model.expression).convertToCOS(tWhen.condition,.tExpression,.variables) quit:$$$ISERR(tSC)
 
 				do ..line($s(tIndex=1:"if",1:"} elseif")_" ("_tExpression_") {",pLevel)

@@ -11,10 +11,18 @@ Property CollectionFields As %ListOfDataTypes;
 
 Property IsCollection As %Boolean;
 
+Property Status As %Status;
+
+Method %OnNew()
+{
+	Set ..Status = $$$OK
+	Quit $$$OK
+}
+
 ClassMethod BuildResourceContext(pResource As %String) As Auwais.FHIRPath.FHIRContextHelper
 {
 	Set tRS = ##class(%SQL.Statement).%ExecDirect(,"SELECT * FROM HS_FHIRMeta_Storage.Rsrc WHERE coreVersion=? AND id=type AND kind='resource' AND %UPPER(id)=?", "4.0.1", $ZCVT(pResource, "U"))
-	Quit:tRS.%Next()=0 $$$OK
+	Throw:tRS.%Next()=0 ##class(%Exception.General).%New("Resource '" _ pResource _ "' does not exist", "-20322",,"")
 	Set sd = {}.%FromJSON(tRS.%Get("json"))
 
 	Set ctx = ##class(Auwais.FHIRPath.FHIRContextHelper).%New()
@@ -69,10 +77,13 @@ Method AdvanceContext(pNextField As %String) As %Boolean
 	/// Switch the FHIR context helper to the context
 	/// specified by pNextField
 	Set nextType = ..Fields.GetAt(pNextField)
+	Set:nextType="" ..Status = $$$ERROR($$$GeneralError, "Field '" _ pNextField _ "' is not valid within this context")
 	Quit:nextType="" 0
 
 	Set tRS = ##class(%SQL.Statement).%ExecDirect(,"SELECT * FROM HS_FHIRMeta_Storage.Rsrc WHERE coreVersion=? AND %UPPER(id)=? AND resourceType='StructureDefinition'", "4.0.1", $ZCVT(nextType, "U"))
-	Quit:tRS.%Next()=0 0
+	Set validField = tRS.%Next()
+	Set:(pNextField'="")&&(validField=0) ..Status = $$$ERROR($$$GeneralError, "Field '" _ pNextField _ "' is not valid within this context")
+	Quit:validField=0 0
 	
 	/// Loop through all fields to find any that are "hanging"
 	/// Hanging fields are those specified in the path of a StructureDefinition

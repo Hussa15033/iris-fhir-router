@@ -48,7 +48,7 @@ Method SearchPaths(pResourceType As %String, pSearchTerm As %String, ByRef paths
 	}
 }
 
-Method InorderTraversal(pExpr As Auwais.FHIRPath.Expr.Expression, pCtx As Auwais.FHIRPath.FHIRContextHelper, ByRef finalTokenPrefix, ByRef refWithinFunctionCall = 0, withinFunctionCall = 0)
+Method InorderTraversal(pExpr As Auwais.FHIRPath.Expr.Expression, ByRef pCtx As Auwais.FHIRPath.FHIRContextHelper, ByRef finalTokenPrefix, ByRef refWithinFunctionCall = 0, withinFunctionCall = 0)
 {
 	/// Reach a leaf node
 	If (pExpr = "") {
