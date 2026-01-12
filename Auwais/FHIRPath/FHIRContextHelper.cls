@@ -9,11 +9,15 @@ Property Fields As %ArrayOfDataTypes;
 
 Property CollectionFields As %ListOfDataTypes;
 
+Property AvailableFields As %ListOfDataTypes;
+
 Property IsCollection As %Boolean;
+
+Property WithinFunction As %String;
 
 Property Status As %Status;
 
-Method %OnNew()
+Method %OnNew() As %Status
 {
 	Set ..Status = $$$OK
 	Quit $$$OK
@@ -55,6 +59,7 @@ Method LoadContext(pStructureDefinition As %DynamicObject) [ Private ]
 		Set propName = $LISTTOSTRING(props, ".")
 
 		Set types = value.type
+		Continue:types=""	
 		Set typeIter = types.iterator()
 		While (typeIter.%GetNext(.k1, .type)) {
 			Set code = type.code
@@ -72,10 +77,27 @@ Method Reset()
 	Set ..CurrentContext = ..ResourceContext
 }
 
-Method AdvanceContext(pNextField As %String) As %Boolean
+Method AdvanceFunction(pFunctionName As %String) As %Boolean
+{
+	Set fnName = $ZCVT(pFunctionName, "L")
+	If (fnName = "aggregate") {
+		Do ..AvailableFields.Insert("$this")
+		Do ..AvailableFields.Insert("$total")
+		Quit 1
+	}
+
+	Quit 0
+}
+
+Method AdvanceContext(pNextField As %String, pIsFunction As %Boolean = 0) As %Boolean
 {
 	/// Switch the FHIR context helper to the context
 	/// specified by pNextField
+	If (pIsFunction) {
+		Set validFn = ..AdvanceFunction(pNextField)
+		Set:validFn=0 ..Status = $$$ERROR($$$GeneralError, "Function '" _ pNextField _ "' does not exist within this context")
+		Quit validFn
+	}
 	Set nextType = ..Fields.GetAt(pNextField)
 	Set:nextType="" ..Status = $$$ERROR($$$GeneralError, "Field '" _ pNextField _ "' is not valid within this context")
 	Quit:nextType="" 0
@@ -142,6 +164,12 @@ Method GetPropertyList() As %ListOfDataTypes
 		Set k = ..Fields.Next(k)
 	}
 
+	Set k = ..AvailableFields.Next("")
+	While k '= "" {
+		Do props.Insert(..AvailableFields.GetAt(k))
+		Set k = ..AvailableFields.Next(k)
+	}
+
 	Return props
 }
 
@@ -151,16 +179,15 @@ Method GetFunctionsList() As %ListOfDataTypes
 
 	If ..IsCollection {
 		/// Add collection functions
-		Do fns.Insert("where")
-		Do fns.Insert("descendants")
-		Do fns.Insert("exists")
-		Do fns.Insert("empty")
-		Do fns.Insert("first")
-		Do fns.Insert("last")
-		Do fns.Insert("skip")
-		Do fns.Insert("tail")
-		Do fns.Insert("take")
-		Do fns.Insert("hasExtension")
+		Do fns.Insert("where(")
+		Do fns.Insert("exists()")
+		Do fns.Insert("empty()")
+		Do fns.Insert("first()")
+		Do fns.Insert("last()")
+		Do fns.Insert("skip()")
+		Do fns.Insert("tail()")
+		Do fns.Insert("take(")
+		Do fns.Insert("hasExtension(")
 	}
 
 	If (..CurrentContext.kind = "primitive-type") {
@@ -176,6 +203,8 @@ Method GetFunctionsList() As %ListOfDataTypes
 		} Else {
 			Throw ##class(%Exception.General).%New("Cannot handle primitive type " _ type,"-303444",,"Failed to handle primitive data type '" _ type _ "' for autocomplete")
 		}
+	} Else {
+		Do fns.Insert("descendants()")
 	}
 
 	Return fns
