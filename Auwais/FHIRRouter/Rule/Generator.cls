@@ -70,18 +70,21 @@ ClassMethod generateFHIRPathEval(pExpression As %String, Output pValue As %Strin
 	/// todo: Add a FHIRpath parser check here BEFORE evaluating
 	/// todo: Handle error checking here too with precise error messages for use in the UI
 	do ..line("set fAPI = ##class(HS.FHIRPath.API).getInstance($lb(""hl7.fhir.r4.core@4.0.1""))", pLevel)
-	do ..line("set fExpr = """ _ $REPLACE(pExpression, """", """""") _ """")
-	do ..line("$$$TRACE(""Evaluating expression""_fExpr)")
+	do ..line("set fExpr = """ _ $REPLACE(pExpression, """", "'") _ """")
+	#; do ..line("$$$TRACE(""Evaluating expression""_fExpr)")
 	do ..line("set fTree = fAPI.parse(fExpr)", pLevel)
-	do ..line("$$$TRACE(""Trace: ""_pContext.FHIRJSON.%ToJSON())")
+	#; do ..line("$$$TRACE(""Trace: ""_pContext.FHIRJSON.%ToJSON())")
 	do ..line("Do fAPI.evaluate(pContext.FHIRJSON, fTree, .fOutput)", pLevel)
-	do ..line("$$$TRACE(""Value of fOutput:""_fOutput)")
+	#; do ..line("$$$TRACE(""Value of fOutput:""_fOutput)")
 
 	If (pForceBoolean) {
 		/// We expect the output from the FHIRPath eval to be a boolean (e.g. for a condition)
 		/// todo: Add a FHIRPath collection check if we expect a single value, as the FHIRPath expression should evaluate to a value
 		/// however if a bool is expected, then as long as the expression has values, it will succeed
-		do ..line("set tVal = (fOutput > 0)", pLevel)
+		do ..line("if (fOutput '= 1) || (fOutput(1, ""t"") '= ""boolean"") {", pLevel)
+		do ..line("$$$ThrowStatus($$$ERROR($$$GeneralError, ""Expression must evaluate to a single boolean value ""))", pLevel + 1)
+		do ..line("}", pLevel)
+		do ..line("set tVal = fOutput(1)", pLevel)
 	} Else {
 		do ..line("set tVal = $CASE(fOutput, 1:fOutput(1),:fOutput)", pLevel)
 	}
@@ -95,7 +98,7 @@ ClassMethod generateWhens(pClassname As %String, variables As %String, pAction A
 		If $case(pAction.type,"rule":1,"foreach":1,:0) {
 			for tIndex=1:1:pAction.whens.Count() {
 				set tWhen = pAction.whens.GetAt(tIndex)
-				do ..generateFHIRPathEval(tWhen.condition, .tExpression, 0, pLevel)
+				do ..generateFHIRPathEval(tWhen.condition, .tExpression, 1, pLevel)
 				#; set tSC=##class(Ens.Rule.Model.expression).convertToCOS(tWhen.condition,.tExpression,.variables) quit:$$$ISERR(tSC)
 
 				do ..line($s(tIndex=1:"if",1:"} elseif")_" ("_tExpression_") {",pLevel)
