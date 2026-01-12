@@ -7,15 +7,15 @@ Class Auwais.FHIRPath.Autocomplete Extends %RegisteredObject
 
 Property Resource As %String;
 
-Property ValidResources As %String;
+Property ResourceFilter As %String;
 
 Property FHIRVersion As %String [ InitialExpression = "4.0.1" ];
 
 Property Paths As %ListOfDataTypes;
 
-Method %OnNew(pValidResources = "") As %Status
+Method %OnNew(pValidResource = "") As %Status
 {
-	Set ..ValidResources = pValidResources
+	Set ..ResourceFilter = pValidResource
 	Quit $$$OK
 }
 
@@ -83,41 +83,55 @@ Method InorderTraversal(pExpr As Auwais.FHIRPath.Expr.Expression, pCtx As Auwais
 
 Method Suggest(pExpression As %String) As %ListOfDataTypes
 {
-	/// First, locate the resource type.
-	Set ..Resource = $PIECE(pExpression, ".")
+	Set outputList = ##class(%ListOfDataTypes).%New()
 
-	Set valid = $LISTFROMSTRING(..ValidResources, ",")
 	Set suggestedResources = ##class(%ListOfDataTypes).%New()
 
-	/// Check if this resource is valid
-	Set tRS = ##class(%SQL.Statement).%ExecDirect(,"SELECT * FROM HS_FHIRMeta_Storage.Rsrc WHERE coreVersion=? AND id=type AND kind='resource' AND %UPPER(id) LIKE ?", "4.0.1", $ZCVT(..Resource, "U") _ "%")
+	Set searchString = ""
+	/// First, locate the resource type.
+	If ..ResourceFilter '= "" {
+		/// Specific resource filter
+		Set ..Resource = ..ResourceFilter
+		Set tRS = ##class(%SQL.Statement).%ExecDirect(,"SELECT * FROM HS_FHIRMeta_Storage.Rsrc WHERE coreVersion=? AND id=type AND kind='resource' AND %UPPER(id) = ?", "4.0.1", $ZCVT(..ResourceFilter, "U"))
+		Throw:tRS.%Next()=0 ##class(%Exception.General).%New("Resource not found","-30211",,"The resource '" _ ..ResourceFilter _ "' could not be found")
+		Set searchString = pExpression
+	} Else {
+		Set ..Resource = $PIECE(pExpression, ".")
+		/// Check if this resource is valid
+		Set tRS = ##class(%SQL.Statement).%ExecDirect(,"SELECT * FROM HS_FHIRMeta_Storage.Rsrc WHERE coreVersion=? AND id=type AND kind='resource' AND %UPPER(id) LIKE ?", "4.0.1", $ZCVT(..Resource, "U") _ "%")
 
-	While tRS.%Next() '= 0 {
-		If (..Resource = tRS.%Get("id")) {
-			/// Full match found
-			Do suggestedResources.Clear()
-			Quit
-		} Else {
-			Do:(..ValidResources="")||($LF(valid, tRS.%Get("id"))'=0) suggestedResources.Insert(tRS.%Get("id") _ ".")
+		While tRS.%Next() '= 0 {
+			If (..Resource = tRS.%Get("id")) {
+				/// Full match found
+				Do suggestedResources.Clear()
+				Quit
+			} Else {
+				Do suggestedResources.Insert(tRS.%Get("id") _ ".")
+			}
 		}
+
+		// Remove the resource from the search string
+		Set searchString = $PIECE(pExpression, ".", 2, *)
 	}
 
 	Return:suggestedResources.Size>0 suggestedResources
-
 
 	/// Check if this resource exists
 	Set pathList = ##class(%ListOfDataTypes).%New()
 
 	Set ctx = ##class(Auwais.FHIRPath.FHIRContextHelper).BuildResourceContext(..Resource)
 	
-	Set ast = ##class(Auwais.FHIRPath.Parser).ParseString(pExpression)
+	Set ast = ##class(Auwais.FHIRPath.Parser).ParseString(searchString)
+
+	/// We want to start by advancing into the resource itself
+	Do ctx.AdvanceContext(..Resource)
 	Do ..InorderTraversal(ast, ctx, .lastTokenFilter, .withinFnCall)
+	
 	#; Write "LastTokenFilter="_lastTokenFilter,!
 
 	Set propertyList = ctx.GetPropertyList()
 	Set fnList = ctx.GetFunctionsList()
 
-	Set filteredList = ##class(%ListOfDataTypes).%New()
 	#; Write "lasttoken=" _ lastTokenFilter,!,!
 	
 	Set suffix = ""
@@ -126,20 +140,20 @@ Method Suggest(pExpression As %String) As %ListOfDataTypes
 	/// Filter 
 	For i=1:1:propertyList.Size {
 		If ($EXTRACT(propertyList.GetAt(i), 1, $L(lastTokenFilter)) = lastTokenFilter) {
-			Do filteredList.Insert(propertyList.GetAt(i) _ suffix)
-			Do:ctx.CollectionFields.Find(propertyList.GetAt(i))'="" filteredList.Insert(propertyList.GetAt(i) _ "[")
-			Do:propertyList.GetAt(i)="extension" filteredList.Insert("extension(")
+			Do outputList.Insert(propertyList.GetAt(i) _ suffix)
+			Do:ctx.CollectionFields.Find(propertyList.GetAt(i))'="" outputList.Insert(propertyList.GetAt(i) _ "[")
+			Do:propertyList.GetAt(i)="extension" outputList.Insert("extension(")
 		}
 	}
 
 	For i=1:1:fnList.Size {
 		Continue:withinFnCall
 		If ($EXTRACT(fnList.GetAt(i), 1, $L(lastTokenFilter)) = lastTokenFilter) {
-			Do filteredList.Insert(fnList.GetAt(i) _ "(")
+			Do outputList.Insert(fnList.GetAt(i) _ "(")
 		}
 	}
 	
-	Return filteredList
+	Return outputList
 }
 
 ClassMethod Test(pExpr)
