@@ -1,27 +1,6 @@
 Class Auwais.FHIRRouter.Rule.Generator Extends Ens.Rule.Generator
 {
 
-ClassMethod correlateByObj(pObjClass As %Dictionary.ClassDefinition, Output pRuleDefinition As Ens.Rule.Model.ruleDefinition) As %Status
-{
-	set tSC=$$$OK
-	try {
-		; find XData with name RuleDefinition
-		set tObjXData="" for i=1:1:pObjClass.XDatas.Count() if pObjClass.XDatas.GetAt(i).Name="RuleDefinition" set tObjXData=pObjClass.XDatas.GetAt(i) quit
-		; RuleDefinition not found
-		if tObjXData="" set tSC=$$$ERROR($$$EnsErrXDataBlockNotDefined,pObjClass.Name,"RuleDefinition") quit
-		; open the reader and correlate the XData to Ens.Rule.Model.ruleDefinition
-		set tReader = ##class(%XML.Reader).%New()
-		set tSC=tReader.OpenStream(tObjXData.Data) quit:$$$ISERR(tSC)
-		do tReader.Correlate("ruleDefinition","Ens.Rule.Model.ruleDefinition")
-		; find the first object
-		do tReader.Next(.pRuleDefinition,.tSC) quit:$$$ISERR(tSC)
-		if $isObject($get(pRuleDefinition)) set pRuleDefinition.Timestamp = $zdatetime(pObjClass.TimeChanged,3,,6)
-	} catch {
-		set tSC=$$$SystemError
-	}
-	quit tSC
-}
-
 /// todo; Update FHIR version to NOT be fixed...
 ClassMethod generateOneAction(pClassname As %String, variables As %String, pAction As Ens.Rule.Model.action, pReason As %String, pAssistClass As %String, %code As %Stream.MethodGenerator, pLevel As %Integer) As %Status
 {
@@ -70,6 +49,11 @@ ClassMethod generateOneAction(pClassname As %String, variables As %String, pActi
 	quit tSC
 }
 
+ClassMethod Trace(pMsg As %String)
+{
+	do ..line("$$$TRACE(""" _ pMsg _ """)")
+}
+
 ClassMethod generateFHIRPathEval(pExpression As %String, Output pValue As %String, pForceBoolean As %Boolean, pLevel)
 {
 	/// todo: Add a FHIRpath parser check here BEFORE evaluating
@@ -94,6 +78,7 @@ ClassMethod generateFHIRPathEval(pExpression As %String, Output pValue As %Strin
 	#; do ..line("$$$TRACE(""Trace: ""_pContext.FHIRJSON.%ToJSON())")
 	do ..line("Do fAPI.evaluate(pContext.FHIRJSON, fTree, .fOutput)", pLevel)
 	#; do ..line("$$$TRACE(""Value of fOutput:""_fOutput)")
+	#; do ..line("$$$TRACE(""Value of fOutput(1):""_fOutput(1))")
 
 	If (pForceBoolean) {
 		/// We expect the output from the FHIRPath eval to be a boolean (e.g. for a condition)
@@ -115,14 +100,17 @@ ClassMethod generateWhens(pClassname As %String, variables As %String, pAction A
 {
 	Set tSC = $$$OK
 	Try {
+		for tIndex=1:1:pAction.whens.Count() {
+			Set tWhen = pAction.whens.GetAt(tIndex)
+			set tSC = ..generateFHIRPathEval(tWhen.condition, .tExpression, 1, pLevel)
+			do ..line("set conditionIndexes(" _ tIndex _ ") = " _ tExpression)
+		}
 		If $case(pAction.type,"rule":1,"foreach":1,:0) {
 			for tIndex=1:1:pAction.whens.Count() {
 				set tWhen = pAction.whens.GetAt(tIndex)
-				set tSC = ..generateFHIRPathEval(tWhen.condition, .tExpression, 1, pLevel)
-				return:'$$$ISOK(tSC) tSC
 				#; set tSC=##class(Ens.Rule.Model.expression).convertToCOS(tWhen.condition,.tExpression,.variables) quit:$$$ISERR(tSC)
 
-				do ..line($s(tIndex=1:"if",1:"} elseif")_" ("_tExpression_") {",pLevel)
+				do ..line($s(tIndex=1:"if",1:"} elseif")_" (conditionIndexes("_tIndex_")) {",pLevel)
 				set tReason = pReason_":when#"_tIndex
 				do ..line("set pReason=pReason_"","_tReason_"""",pLevel+1)
 				do ..setActionReasonLines(tReason, pLevel)

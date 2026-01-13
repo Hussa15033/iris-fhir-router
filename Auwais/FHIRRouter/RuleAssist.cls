@@ -72,7 +72,7 @@ ClassMethod RuntimeConstraintCheck(ByRef pArray, pContext, Output pPassed) As %S
 {
 	set pArray("msgClass")="Ens.StreamContainer"
 	Do ##super(.pArray,pContext,.pPassed)
-	Quit pPassed
+	Quit $$$OK
 }
 
 ClassMethod GetValidActions()
