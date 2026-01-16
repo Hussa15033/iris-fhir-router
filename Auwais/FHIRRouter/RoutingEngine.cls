@@ -3,9 +3,14 @@ Class Auwais.FHIRRouter.RoutingEngine Extends EnsLib.MsgRouter.RoutingEngine [ C
 
 Property FHIRJSON As %DynamicObject;
 
-Method OnRequest(request As Ens.StreamContainer, Output response As %Persistent) As %Status
+Method OnRequest(request As %Persistent, Output response As %Persistent) As %Status
 {
-	Set ..FHIRJSON = {}.%FromJSON(request.Stream.Read())
+	If (request.%Extends("HS.Message.FHIR.Request")) {
+		Set stream = request.Payload
+	} ElseIf (request.%Extends("Ens.StreamContainer")) {
+		Set stream = request.Stream
+	}
+	Set ..FHIRJSON = {}.%FromJSON(stream.Read())
 	Set tSC = ##super(request,.response)
 	Quit tSC
 }

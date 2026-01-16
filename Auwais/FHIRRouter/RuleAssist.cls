@@ -30,6 +30,7 @@ ClassMethod GetQueryData(ByRef pArray, pParam) As %String
 			While tRS.%Next() {
 				Set tVal = tVal _ "," _ tRS.%Get("coreVersion")
 			}
+			Set:tVal="" tVal = ",4.0.1"
 		} ElseIf pParam="resourceFilter" {
 			Set tResourceVersion = $G(pArray("FHIRVersion"))
 			Quit:tResourceVersion=""
@@ -38,6 +39,9 @@ ClassMethod GetQueryData(ByRef pArray, pParam) As %String
 			While (tRS.%Next()) {
 				Set tVal = tVal _ "," _ tRS.%Get("id")
 			}
+
+			Set:tVal="" tVal = $CASE(tResourceVersion, "4.0.1":",Account,ActivityDefinition,AdverseEvent,AllergyIntolerance,Appointment,AppointmentResponse,AuditEvent,Basic,Binary,BiologicallyDerivedProduct,BodyStructure,Bundle,CapabilityStatement,CarePlan,CareTeam,CatalogEntry,ChargeItem,ChargeItemDefinition,Claim,ClaimResponse,ClinicalImpression,CodeSystem,Communication,CommunicationRequest,CompartmentDefinition,Composition,ConceptMap,Condition,Consent,Contract,Coverage,CoverageEligibilityRequest,CoverageEligibilityResponse,DetectedIssue,Device,DeviceDefinition,DeviceMetric,DeviceRequest,DeviceUseStatement,DiagnosticReport,DocumentManifest,DocumentReference,DomainResource,EffectEvidenceSynthesis,Encounter,Endpoint,EnrollmentRequest,EnrollmentResponse,EpisodeOfCare,EventDefinition,Evidence,EvidenceVariable,ExampleScenario,ExplanationOfBenefit,FamilyMemberHistory,Flag,Goal,GraphDefinition,Group,GuidanceResponse,HealthcareService,ImagingStudy,Immunization,ImmunizationEvaluation,ImmunizationRecommendation,ImplementationGuide,InsurancePlan,Invoice,Library,Linkage,List,Location,Measure,MeasureReport,Media,Medication,MedicationAdministration,MedicationDispense,MedicationKnowledge,MedicationRequest,MedicationStatement,MedicinalProduct,MedicinalProductAuthorization,MedicinalProductContraindication,MedicinalProductIndication,MedicinalProductIngredient,MedicinalProductInteraction,MedicinalProductManufactured,MedicinalProductPackaged,MedicinalProductPharmaceutical,MedicinalProductUndesirableEffect,MessageDefinition,MessageHeader,MolecularSequence,NamingSystem,NutritionOrder,Observation,ObservationDefinition,OperationDefinition,OperationOutcome,Organization,OrganizationAffiliation,Parameters,Patient,PaymentNotice,PaymentReconciliation,Person,PlanDefinition,Practitioner,PractitionerRole,Procedure,Provenance,Questionnaire,QuestionnaireResponse,RelatedPerson,RequestGroup,ResearchDefinition,ResearchElementDefinition,ResearchStudy,ResearchSubject,Resource,RiskAssessment,RiskEvidenceSynthesis,Schedule,SearchParameter,ServiceRequest,Slot,Specimen,SpecimenDefinition,StructureDefinition,StructureMap,Subscription,Substance,SubstanceNucleicAcid,SubstancePolymer,SubstanceProtein,SubstanceReferenceInformation,SubstanceSourceMaterial,SubstanceSpecification,SupplyDelivery,SupplyRequest,Task,TerminologyCapabilities,TestReport,TestScript,ValueSet,VerificationResult,VisionPrescription",
+			:"")
 		}
 	} Catch {
 	}
@@ -68,10 +72,21 @@ ClassMethod GenerateRuleSchema() As %DynamicObject
 	return schema
 }
 
-ClassMethod RuntimeConstraintCheck(ByRef pArray, pContext, Output pPassed) As %Status
+ClassMethod RuntimeConstraintCheck(ByRef pArray, pContext, Output pPassed = 0) As %Status
 {
-	set pArray("msgClass")="Ens.StreamContainer"
-	Do ##super(.pArray,pContext,.pPassed)
+	Set pPassed = 0
+	Set pArray("msgClass")=$CASE(pContext.MsgClass, "Ens.StreamContainer":"Ens.StreamContainer", "HS.Message.FHIR.Request":"HS.Message.FHIR.Request", :"")
+
+	Set tSource=$G(pArray("source")) 
+	Quit:""'=tSource&&(tSource'=pContext.Source) $$$OK
+
+	Set tMsgClass=$G(pArray("msgClass")) 
+	Quit:""'=tMsgClass&&(tMsgClass'=pContext.MsgClass) $$$OK
+
+	/// Runtime constraint to check the FHIR resource is valid
+	If $ISOBJECT(pContext.FHIRJSON) && $METHOD(pContext.FHIRJSON, "%Extends", "%DynamicObject") && (pContext.FHIRJSON.%Get("resourceType") '= "") && ($ZCVT(pContext.FHIRJSON.resourceType, "U") = $ZCVT(pArray("resourceFilter"), "U")) {
+		Set pPassed = 1
+	}
 	Quit $$$OK
 }
 
