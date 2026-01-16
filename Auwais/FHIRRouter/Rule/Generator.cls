@@ -6,7 +6,28 @@ ClassMethod generateOneAction(pClassname As %String, variables As %String, pActi
 {
 	set tSC=$$$OK
 	try {
-		if ( pAction.type = "assign" ) {
+		if ( pAction.type = "rule" ) {
+			if ( pAction.disabled ) quit
+			do ..line("; Evaluating rule: "_pReason,pLevel)
+			if ( pAssistClass'="" ) {
+				do ..line("kill tConstraints",pLevel)
+				for i=1:1:pAction.constraints.Count() {
+					If (($f(pAction.constraints.GetAt(i).value,"""_")'=0) && ($f(pAction.constraints.GetAt(i).value,"_""",$f(pAction.constraints.GetAt(i).value,"""_"))'=0)) {
+						set tSC = $$$ERROR($$$EnsErrGeneral,"Invalid Constraint: "_pAction.constraints.GetAt(i).name_"="_pAction.constraints.GetAt(i).value_". Constraint values should not contain ""_ and _""")
+						quit
+					}
+					do ..line("set tConstraints("""_pAction.constraints.GetAt(i).name_""")="""_pAction.constraints.GetAt(i).value_"""",pLevel)
+				}
+				Quit:$$$ISERR(tSC)
+				do ..line("set tSC=##class("_pAssistClass_").RuntimeConstraintCheck(.tConstraints,pContext,.pPassed) quit:$$$ISERR(tSC)",pLevel)
+				do ..line("if (pLogLevel [ $$$eRuleLogTypeConditionDebug) set tSC = ##class(Ens.Rule.DebugLog).Log(pDebugId,$$$eRuleLogTypeConditionDebug,"_$$$quote(pReason)_","_$$$quote("Constraints for rule '"_$select(pAction.name = "": pReason, 1: pAction.name)_"' ")_"_$select(pPassed: ""passed"",1: ""failed"") _ $CASE($G(tConstraints(""constraintErrorMsg"")), """":"""", :"": ""_tConstraints(""constraintErrorMsg"")),0) quit:$$$ISERR(tSC)",pLevel)
+				do ..line("if pPassed {",pLevel)
+				set pLevel=pLevel+1
+			}
+			Set tSC = ..generateWhens(pClassname,.variables,pAction,pReason,pAssistClass,%code,pLevel)
+			if ( pAssistClass'="" ) { set pLevel=pLevel-1 do ..line("}",pLevel) }
+			Quit:$$$ISERR(tSC)
+		} elseif ( pAction.type = "assign" ) {
 			/// Override the value of the expression to be an objectscript call to the FHIRPath evaluator
 			set tSC = ..generateFHIRPathEval(pAction.value, .tValueExpression, 0, pLevel)
 			return:'$$$ISOK(tSC) tSC

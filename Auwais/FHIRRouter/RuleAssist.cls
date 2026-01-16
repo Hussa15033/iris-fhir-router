@@ -77,16 +77,32 @@ ClassMethod RuntimeConstraintCheck(ByRef pArray, pContext, Output pPassed = 0) A
 	Set pPassed = 0
 	Set pArray("msgClass")=$CASE(pContext.MsgClass, "Ens.StreamContainer":"Ens.StreamContainer", "HS.Message.FHIR.Request":"HS.Message.FHIR.Request", :"")
 
-	Set tSource=$G(pArray("source")) 
-	Quit:""'=tSource&&(tSource'=pContext.Source) $$$OK
+	Set tSource=$G(pArray("source"))
+	If (""'=tSource&&(tSource'=pContext.Source)) {
+		Set pArray("constraintErrorMsg") = "Message source is not '" _ pContext.Source _ "'"
+		Quit $$$OK
+	}
 
+	
 	Set tMsgClass=$G(pArray("msgClass")) 
-	Quit:""'=tMsgClass&&(tMsgClass'=pContext.MsgClass) $$$OK
+	If (""'=tMsgClass&&(tMsgClass'=pContext.MsgClass)) {
+		Set pArray("constraintErrorMsg") = "Message class is not valid"
+		Quit $$$OK
+	}
 
 	/// Runtime constraint to check the FHIR resource is valid
-	If $ISOBJECT(pContext.FHIRJSON) && $METHOD(pContext.FHIRJSON, "%Extends", "%DynamicObject") && (pContext.FHIRJSON.%Get("resourceType") '= "") && ($ZCVT(pContext.FHIRJSON.resourceType, "U") = $ZCVT(pArray("resourceFilter"), "U")) {
-		Set pPassed = 1
+	If ('$ISOBJECT(pContext.FHIRJSON)) || '$METHOD(pContext.FHIRJSON, "%Extends", "%DynamicObject") {
+		Set pArray("constraintErrorMsg") = "Message does not contain valid JSON object"
+		Quit $$$OK
 	}
+
+	If (pContext.FHIRJSON.%Get("resourceType") = "") || ($ZCVT(pContext.FHIRJSON.resourceType, "U") '= $ZCVT(pArray("resourceFilter"), "U")) {
+		Set pArray("constraintErrorMsg") = "Resource is not of type '" _ pArray("resourceFilter") _ "'"
+		Quit $$$OK
+	}
+	
+	/// If we reach here, the message is valid and satisfies the constraints set
+	Set pPassed = 1
 	Quit $$$OK
 }
 
