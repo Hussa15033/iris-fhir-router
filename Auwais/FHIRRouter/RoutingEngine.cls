@@ -6,7 +6,8 @@ Property FHIRJSON As %DynamicObject;
 Method OnRequest(request As %Persistent, Output response As %Persistent) As %Status
 {
 	If (request.%Extends("HS.Message.FHIR.Request")) {
-		Set stream = request.Payload
+		Set stream = request.GetPayloadOref()
+
 	} ElseIf (request.%Extends("Ens.StreamContainer")) {
 		Set stream = request.Stream
 	}
