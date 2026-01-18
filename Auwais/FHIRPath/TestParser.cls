@@ -38,6 +38,7 @@ ClassMethod Test()
 	Set ^AFPTestsSuccess = 0
 	Do ..RunOneTest(56, "Pat", "Patient.")
 	Do ..RunOneTest(57, "Pa", "Parameters.")
+	Do ..RunOneTest(58, "Bundle.entry.resource.ofType(Patient).gend", "gender.")
 	Do ..RunOneTest(1, "Patient.", "name.")
 	Do ..RunOneTest(2, "Patient.", "telecom.")
 	Do ..RunOneTest(3, "Patient.na", "name.")

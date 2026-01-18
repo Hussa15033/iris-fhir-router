@@ -62,7 +62,7 @@ Method InorderTraversal(pExpr As Auwais.FHIRPath.Expr.Expression, ByRef pCtx As 
 	} ElseIf cls = "Auwais.FHIRPath.Expr.IdentExpr" {
 		Set finalTokenPrefix = pExpr.Name
 		Set refWithinFunctionCall = withinFunctionCall
-		Do pCtx.AdvanceContext(finalTokenPrefix)
+		Do pCtx.AdvanceContext(finalTokenPrefix, withinFunctionCall)
 	} ElseIf cls = "Auwais.FHIRPath.Expr.PartialExpr" {
 		Set refWithinFunctionCall = withinFunctionCall
 		Set finalTokenPrefix = ""
