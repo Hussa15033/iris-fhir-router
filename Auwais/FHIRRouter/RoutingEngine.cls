@@ -5,11 +5,15 @@ Property FHIRJSON As %DynamicObject;
 
 Method OnRequest(request As %Persistent, Output response As %Persistent) As %Status
 {
-	If (request.%Extends("HS.Message.FHIR.Request")) {
-		Set stream = request.GetPayloadOref()
 
+	If (request.%Extends("HS.FHIRServer.Interop.Request")) {
+		Set stream = ##class(HS.SDA3.QuickStream).%OpenId(request.QuickStreamId)
+	} ElseIf (request.%Extends("HS.Message.FHIR.Request")) {
+		Set stream = request.GetPayloadOref()
 	} ElseIf (request.%Extends("Ens.StreamContainer")) {
 		Set stream = request.Stream
+	} Else {
+		Throw ##class(%Exception.General).%New("Message not handled",,,"Message of type '" _ $CLASSNAME(request) _ "' cannot be routed")
 	}
 	Set ..FHIRJSON = {}.%FromJSON(stream.Read())
 	Set tSC = ##super(request,.response)

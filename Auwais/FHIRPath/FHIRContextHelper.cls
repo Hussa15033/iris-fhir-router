@@ -50,6 +50,7 @@ Method LoadContext(pStructureDefinition As %DynamicObject) [ Private ]
 	/// Reset fields context
 	Do ..Fields.Clear()
 	Do ..CollectionFields.Clear()
+	Do ..AvailableFields.Clear()
 
 	While (iter.%GetNext(.key, .value)) {
 		Continue:(value.path = pStructureDefinition.name) /// Ignore first element
