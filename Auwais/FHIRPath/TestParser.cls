@@ -11,15 +11,21 @@ ClassMethod RunOneTest(pI, pSearchTerm, pSuggestion) As %Boolean
 		Set ^AFPTests = ^AFPTests + 1
 		/// Run a search term and ensure pSuggestion is in the list of suggestions returned
 		Try {
+			Set isNegativeTest = 0
+			If ($EXTRACT(pSuggestion, 1, 1) = "!") {
+				Set pSuggestion = $EXTRACT(pSuggestion, 2, *)
+				Set isNegativeTest = 1
+			}
 			Set autocomplete = ##class(Auwais.FHIRPath.Autocomplete).%New()
 			Set suggestionList = autocomplete.Suggest(pSearchTerm)
 
-			Set success = suggestionList.Find(pSuggestion) '= ""
+			Set found = suggestionList.Find(pSuggestion) '= ""
 		} Catch ex {
-			Set success = ""
+			Set found = ""
 		}
 
-		If (success) {
+		/// If the test is negative 
+		If (found && 'isNegativeTest) || ('found && isNegativeTest) {
 			Set ^AFPTestsSuccess = ^AFPTestsSuccess + 1
 			Write " - Success",!
 			Return 1
@@ -58,9 +64,9 @@ ClassMethod Test()
 	Do ..RunOneTest(17, "Practitioner.nam", "name.")
 	Do ..RunOneTest(18, "Questionnaire.descendan", "descendants()")
 	Do ..RunOneTest(19, "Observation.component.where(value.as(Qu", "Quantity)")
-	Do ..RunOneTest(20, "Patient.name.given.ex", "extension")
-	Do ..RunOneTest(21, "Patient.name.given.ex", "extension(")
-	Do ..RunOneTest(22, "Patient.name.given.h", "hasExtension(")
+	Do ..RunOneTest(20, "Patient.name.give", "given")
+	Do ..RunOneTest(21, "Patient.name.given.ex", "!extension(")
+	Do ..RunOneTest(22, "Patient.name.given.h", "!hasExtension(")
 	Do ..RunOneTest(23, "Patient.mu", "multipleBirthInteger")
 	Do ..RunOneTest(24, "Patient.de", "deceasedDateTime")
 	Do ..RunOneTest(25, "Observation.val", "valueInteger")
