@@ -7,6 +7,7 @@ Class Auwais.FHIRPath.TestParser Extends %RegisteredObject
 
 ClassMethod RunOneTest(pI, pSearchTerm, pSuggestion) As %Boolean
 {
+		Quit:(^AFPTestNumber'="")&&(pI'=^AFPTestNumber) 0
 		Write "Running test " _ pI _ "(" _ pSearchTerm _ ")"
 		Set ^AFPTests = ^AFPTests + 1
 		/// Run a search term and ensure pSuggestion is in the list of suggestions returned
@@ -20,7 +21,10 @@ ClassMethod RunOneTest(pI, pSearchTerm, pSuggestion) As %Boolean
 			Set suggestionList = autocomplete.Suggest(pSearchTerm)
 
 			Set found = suggestionList.Find(pSuggestion) '= ""
+
+			zw:^AFPDEBUG suggestionList
 		} Catch ex {
+			W:^AFPDEBUG "Exception occurred"
 			Set found = ""
 		}
 
@@ -35,13 +39,16 @@ ClassMethod RunOneTest(pI, pSearchTerm, pSuggestion) As %Boolean
 		}
 }
 
-ClassMethod Test()
+ClassMethod Test(pDebug = 0, pTestNumber = "")
 {
-	
+	Kill ^AFPDEBUG
 	Kill ^AFPTests
 	Kill ^AFPTestsSuccess
+	Kill ^AFPTestNumber
 	Set ^AFPTests = 0
 	Set ^AFPTestsSuccess = 0
+	Set ^AFPTestNumber = pTestNumber
+	Set ^AFPDEBUG = pDebug
 	Do ..RunOneTest(56, "Pat", "Patient.")
 	Do ..RunOneTest(57, "Pa", "Parameters.")
 	Do ..RunOneTest(58, "Bundle.entry.resource.ofType(Patient).gend", "gender.")
@@ -50,14 +57,14 @@ ClassMethod Test()
 	Do ..RunOneTest(2, "Patient.", "telecom.")
 	Do ..RunOneTest(3, "Patient.na", "name.")
 	Do ..RunOneTest(4, "Patient.name.", "where(")
-	Do ..RunOneTest(5, "Patient.telecom.where(system='phone' and use='mobile').", "value.")
+	Do ..RunOneTest(5, "Patient.telecom.where(system='phone' and use='mobile')", "value.")
 	Do ..RunOneTest(6, "Patient.identifier.where(", "system")
 	Do ..RunOneTest(7, "Patient.identifier.where(sys", "system")
 	Do ..RunOneTest(8, "Patient.bi", "birthDate.")
 	Do ..RunOneTest(9, "Patient.nAm", "name.")
-	Do ..RunOneTest(10, "Patient.name.t", "text")
-	Do ..RunOneTest(11, "Patient.name.text.fir", "first().")
-	Do ..RunOneTest(12, "Patient.name.text.first().", "substring")
+	Do ..RunOneTest(10, "Patient.name.t", "text.")
+	Do ..RunOneTest(11, "Patient.name.text.fir", "first()")
+	Do ..RunOneTest(12, "Patient.name.text.first().", "substring(")
 	Do ..RunOneTest(13, "Patient.telecom.where(system='phone' and use='mobile').", "first()")
 	Do ..RunOneTest(14, "Patient.telecom.where(system='phone' and use='mobile').", "last()")
 	Do ..RunOneTest(15, "Patient.telecom.where(system='phone' and use='mobile').first().", "value.")
@@ -66,12 +73,12 @@ ClassMethod Test()
 	Do ..RunOneTest(18, "Questionnaire.descendan", "descendants()")
 	Do ..RunOneTest(19, "Observation.component.where(value.as(Qu", "Quantity)")
 	Do ..RunOneTest(20, "Patient.name.give", "given.")
-	Do ..RunOneTest(21, "Patient.name.given.ex", "!extension(")
-	Do ..RunOneTest(22, "Patient.name.given.h", "!hasExtension(")
-	Do ..RunOneTest(23, "Patient.mu", "multipleBirthInteger")
-	Do ..RunOneTest(24, "Patient.de", "deceasedDateTime")
-	Do ..RunOneTest(25, "Observation.val", "valueInteger")
-	Do ..RunOneTest(26, "Observation.value.a", "aggregate")
+	Do ..RunOneTest(21, "Patient.name.given.ex", "extension.")
+	Do ..RunOneTest(22, "Patient.name.given.h", "hasExtension(")
+	Do ..RunOneTest(23, "Patient.mu", "multipleBirthInteger.")
+	Do ..RunOneTest(24, "Patient.de", "deceasedDateTime.")
+	Do ..RunOneTest(25, "Observation.val", "valueInteger.")
+	Do ..RunOneTest(26, "Observation.value.a", "aggregate.")
 	Do ..RunOneTest(27, "Observation.value.aggregate(", "$this")
 	Do ..RunOneTest(28, "Observation.value.aggregate(", "iif(")
 	Do ..RunOneTest(29, "Observation.value.aggregate(iif(", "$total")
@@ -89,7 +96,7 @@ ClassMethod Test()
 	Do ..RunOneTest(41, "Patient.name.tak", "take(")
 	Do ..RunOneTest(42, "Practitioner.name.family.unio", "union(")
 	Do ..RunOneTest(43, "Practitioner.name.family.union(P", "Practitioner")
-	Do ..RunOneTest(44, "Practitioner.name.family.union(Practitioner.", "id")
+	Do ..RunOneTest(44, "Practitioner.name.family.union(Practitioner.", "id.")
 	Do ..RunOneTest(45, "Bundle.entry.resource.ofType(P", "Patient")
 	Do ..RunOneTest(46, "Patient.telecom.wher", "where(")
 	Do ..RunOneTest(47, "Patient.telecom.where(", "use")
