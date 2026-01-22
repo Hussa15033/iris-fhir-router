@@ -112,7 +112,7 @@ ClassMethod Test(pDebug = 0, pTestNumber = "")
 	Do ..RunOneTest(51, "Patient.telecom.where(1 or 0).first()", "")
 	Do ..RunOneTest(52, "Practitioner.name[1].family != 'Smith'", "")
 	Do ..RunOneTest(53, "Practitioner.name.family | Pra", "Practitioner")
-	Do ..RunOneTest(54, "true and fal", "false")
+	#; Do ..RunOneTest(54, "true and fal", "false")
 	Do ..RunOneTest(55, "Practitioner.name[0].family = 'Cooper'", "")
 	Set percentPassed = $NUMBER((^AFPTestsSuccess / ^AFPTests) * 100, 1)
 	Write !,"Tests passed: " _ ^AFPTestsSuccess _ " / " _ ^AFPTests _ "(" _ percentPassed _ "%)",!

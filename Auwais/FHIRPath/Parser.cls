@@ -78,6 +78,7 @@ ClassMethod ParseString(pInput As %String) As Auwais.FHIRPath.Parser
 	Do parser.RegisterInfix("NOT_EQUALS", ##class(Auwais.FHIRPath.Parselet.BinaryOpParselet).%New(112))
 	Do parser.RegisterInfix("LOGIC_AND", ##class(Auwais.FHIRPath.Parselet.BinaryOpParselet).%New(108))
 	Do parser.RegisterInfix("LOGIC_OR", ##class(Auwais.FHIRPath.Parselet.BinaryOpParselet).%New(107))
+	Do parser.RegisterInfix("UNION", ##class(Auwais.FHIRPath.Parselet.BinaryOpParselet).%New(107))
 	Do parser.RegisterInfix("LSQRBRACKET", ##class(Auwais.FHIRPath.Parselet.IndexParselet).%New(120))
 
 	Return parser.ParseExpression(0)
@@ -85,10 +86,9 @@ ClassMethod ParseString(pInput As %String) As Auwais.FHIRPath.Parser
 
 ClassMethod Test()
 {
-	Set input = "Patient.telecome.where(us"
-	Set parser = ..ParseString(input)
+	Set input = "Patient.telecom.where(1 and 1).first().v"
+	Set expr = ..ParseString(input)
 
-	Set expr = parser.ParseExpression(0)
 	Return expr
 }
 

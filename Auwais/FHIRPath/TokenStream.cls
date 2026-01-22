@@ -32,6 +32,7 @@ Method %OnNew(pInput As %String) As %Status
 			"/":"SLASH",
 			"]":"RSQRBRACKET",
 			"!=":"NOT_EQUALS",
+			"|":"UNION",
 			"EOT":"EOF",
 			:"")
 			Throw:opType="" ##class(%Exception.General).%New("No matching token for operator","-303282",,"Cannot handle operator '" _token.opName_"'")
