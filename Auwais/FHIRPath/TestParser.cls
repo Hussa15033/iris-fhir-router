@@ -25,6 +25,7 @@ ClassMethod RunOneTest(pI, pSearchTerm, pSuggestion) As %Boolean
 			zw:^AFPDEBUG suggestionList
 		} Catch ex {
 			W:^AFPDEBUG "Exception occurred"
+			W:^AFPDEBUG ex.DisplayString()
 			Set found = ""
 		}
 
@@ -57,7 +58,7 @@ ClassMethod Test(pDebug = 0, pTestNumber = "")
 	Do ..RunOneTest(2, "Patient.", "telecom.")
 	Do ..RunOneTest(3, "Patient.na", "name.")
 	Do ..RunOneTest(4, "Patient.name.", "where(")
-	Do ..RunOneTest(5, "Patient.telecom.where(system='phone' and use='mobile')", "value.")
+	Do ..RunOneTest(5, "Patient.telecom.where(system='phone' and use='mobile').", "value.")
 	Do ..RunOneTest(6, "Patient.identifier.where(", "system")
 	Do ..RunOneTest(7, "Patient.identifier.where(sys", "system")
 	Do ..RunOneTest(8, "Patient.bi", "birthDate.")

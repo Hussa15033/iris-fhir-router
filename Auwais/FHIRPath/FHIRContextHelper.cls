@@ -64,7 +64,14 @@ Method LoadContext(pStructureDefinition As %DynamicObject) [ Private ]
 		Set typeIter = types.iterator()
 		While (typeIter.%GetNext(.k1, .type)) {
 			Set code = type.code
-			Do ..Fields.SetAt(code, propName)
+			Set fieldName = propName
+
+			If (propName [ "[x]") {
+				/// The value replacing [x] is camel case of the type of the property
+				Set upperCaseType = $ZCVT($EXTRACT(code, 1, 1), "U") _ $EXTRACT(code, 2, *)
+				Set fieldName = $REPLACE(propName, "[x]", upperCaseType)
+			}
+			Do ..Fields.SetAt(code, fieldName)
 		}
 
 		If (value.max = "*") || (value.max > 1) {
@@ -78,16 +85,41 @@ Method Reset()
 	Set ..CurrentContext = ..ResourceContext
 }
 
-Method AdvanceFunction(pFunctionName As %String) As %Boolean
+Method TranslateFunctionToSuggestion(pFunctionName As %String) As %String
 {
 	Set fnName = $ZCVT(pFunctionName, "L")
+
+	/// Functions that take no parameters
+	Set zeroParameterFunctions = $LISTFROMSTRING("exists,empty,first,last,tail",",")
+
+	/// Function that return a primitive, not a collection
+	Set primitiveFunctions = $LISTFROMSTRING("exists,empty",",")
+
+	Quit:$LISTFIND(zeroParameterFunctions, fnName) pFunctionName _ "()"
+	Quit pFunctionName _ "("
+}
+
+Method AdvanceFunction(pFunctionName As %String) As %Boolean
+{
+
+	Set fnName = $ZCVT(pFunctionName, "L")
+	
+	/// Function that return a primitive, not a collection
+	Set primitiveFunctions = $LISTFROMSTRING("exists,empty",",")
+
+	/// Special cases
 	If (fnName = "aggregate") {
 		Do ..AvailableFields.Insert("$this")
 		Do ..AvailableFields.Insert("$total")
-		Quit 1
+		Do ..AvailableFields.Insert("iif(")
 	}
 
-	Quit 0
+
+	If $LISTFIND(primitiveFunctions, fnName) {
+		Set ..IsCollection = 0
+	}
+
+	Quit 1
 }
 
 Method AdvanceContext(pNextField As %String, pIsFunction As %Boolean = 0) As %Boolean
@@ -96,8 +128,8 @@ Method AdvanceContext(pNextField As %String, pIsFunction As %Boolean = 0) As %Bo
 	/// specified by pNextField
 	If (pIsFunction) {
 		Set validFn = ..AdvanceFunction(pNextField)
-		Set:validFn=0 ..Status = $$$ERROR($$$GeneralError, "Function '" _ pNextField _ "' does not exist within this context")
-		Quit validFn
+		Set:validFn="" ..Status = $$$ERROR($$$GeneralError, "Function '" _ pNextField _ "' does not exist within this context")
+		Quit $$$ISOK(..Status)
 	}
 	Set nextType = ..Fields.GetAt(pNextField)
 	Set:nextType="" ..Status = $$$ERROR($$$GeneralError, "Field '" _ pNextField _ "' is not valid within this context")
@@ -180,15 +212,15 @@ Method GetFunctionsList() As %ListOfDataTypes
 
 	If ..IsCollection {
 		/// Add collection functions
-		Do fns.Insert("where(")
-		Do fns.Insert("exists()")
-		Do fns.Insert("empty()")
-		Do fns.Insert("first()")
-		Do fns.Insert("last()")
-		Do fns.Insert("skip()")
-		Do fns.Insert("tail()")
-		Do fns.Insert("take(")
-		Do fns.Insert("hasExtension(")
+		Do fns.Insert(..TranslateFunctionToSuggestion("where"))
+		Do fns.Insert(..TranslateFunctionToSuggestion("exists"))
+		Do fns.Insert(..TranslateFunctionToSuggestion("empty"))
+		Do fns.Insert(..TranslateFunctionToSuggestion("first"))
+		Do fns.Insert(..TranslateFunctionToSuggestion("last"))
+		Do fns.Insert(..TranslateFunctionToSuggestion("skip"))
+		Do fns.Insert(..TranslateFunctionToSuggestion("tail"))
+		Do fns.Insert(..TranslateFunctionToSuggestion("take"))
+		Do fns.Insert(..TranslateFunctionToSuggestion("hasExtension"))
 	}
 
 	If (..CurrentContext.kind = "primitive-type") {
