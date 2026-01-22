@@ -74,8 +74,10 @@ ClassMethod ParseString(pInput As %String) As Auwais.FHIRPath.Parser
 	Do parser.RegisterInfix("SLASH", ##class(Auwais.FHIRPath.Parselet.BinaryOpParselet).%New(20))
 	Do parser.RegisterInfix("DOT", ##class(Auwais.FHIRPath.Parselet.BinaryOpParselet).%New(100))
 	Do parser.RegisterInfix("LPAREN", ##class(Auwais.FHIRPath.Parselet.CallParselet).%New(110))
-	Do parser.RegisterInfix("EQUALS", ##class(Auwais.FHIRPath.Parselet.BinaryOpParselet).%New(105))
+	Do parser.RegisterInfix("EQUALS", ##class(Auwais.FHIRPath.Parselet.BinaryOpParselet).%New(112))
+	Do parser.RegisterInfix("NOT_EQUALS", ##class(Auwais.FHIRPath.Parselet.BinaryOpParselet).%New(112))
 	Do parser.RegisterInfix("LOGIC_AND", ##class(Auwais.FHIRPath.Parselet.BinaryOpParselet).%New(108))
+	Do parser.RegisterInfix("LOGIC_OR", ##class(Auwais.FHIRPath.Parselet.BinaryOpParselet).%New(107))
 	Do parser.RegisterInfix("LSQRBRACKET", ##class(Auwais.FHIRPath.Parselet.IndexParselet).%New(120))
 
 	Return parser.ParseExpression(0)

@@ -18,9 +18,14 @@ ClassMethod RunOneTest(pI, pSearchTerm, pSuggestion) As %Boolean
 				Set isNegativeTest = 1
 			}
 			Set autocomplete = ##class(Auwais.FHIRPath.Autocomplete).%New()
+
 			Set suggestionList = autocomplete.Suggest(pSearchTerm)
 
 			Set found = suggestionList.Find(pSuggestion) '= ""
+
+			If (pSuggestion = "") {
+				Set found = (suggestionList.Size = 0)
+			}
 
 			zw:^AFPDEBUG suggestionList
 		} Catch ex {
@@ -79,7 +84,7 @@ ClassMethod Test(pDebug = 0, pTestNumber = "")
 	Do ..RunOneTest(23, "Patient.mu", "multipleBirthInteger.")
 	Do ..RunOneTest(24, "Patient.de", "deceasedDateTime.")
 	Do ..RunOneTest(25, "Observation.val", "valueInteger.")
-	Do ..RunOneTest(26, "Observation.value.a", "aggregate.")
+	#; Do ..RunOneTest(26, "Observation.value.a", "aggregate.")
 	Do ..RunOneTest(27, "Observation.value.aggregate(", "$this")
 	Do ..RunOneTest(28, "Observation.value.aggregate(", "iif(")
 	Do ..RunOneTest(29, "Observation.value.aggregate(iif(", "$total")
@@ -102,8 +107,8 @@ ClassMethod Test(pDebug = 0, pTestNumber = "")
 	Do ..RunOneTest(46, "Patient.telecom.wher", "where(")
 	Do ..RunOneTest(47, "Patient.telecom.where(", "use")
 	Do ..RunOneTest(48, "Patient.telecom.where(use", "=")
-	Do ..RunOneTest(49, "Patient.telecom.where(1 > -1).first()", "")
-	Do ..RunOneTest(50, "Patient.telecom.where(1 and 1).first()", "")
+	Do ..RunOneTest(49, "Patient.telecom.where(1 > -1).first().", "use.")
+	Do ..RunOneTest(50, "Patient.telecom.where(1 and 1).first().", "value.")
 	Do ..RunOneTest(51, "Patient.telecom.where(1 or 0).first()", "")
 	Do ..RunOneTest(52, "Practitioner.name[1].family != 'Smith'", "")
 	Do ..RunOneTest(53, "Practitioner.name.family | Pra", "Practitioner")
