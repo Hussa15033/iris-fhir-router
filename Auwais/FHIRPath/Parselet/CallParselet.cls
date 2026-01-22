@@ -17,13 +17,13 @@ Method Parse(pParser As Auwais.FHIRPath.Parser, pLeft As Auwais.FHIRPath.Expr.Ex
 		While pParser.Match("COMMA") {
 			Do Args.Insert(pParser.Parse(0))
 		}
+	}
 
-		/// After we have parsed the arguments, we expect a RIGHTPAREN
-		If pParser.Peek().Type '= "EOF" {
-			Set PartialCall = 0
-			/// We expected RPAREN, but got an EOF
-			Do pParser.Expect("RPAREN")
-		}
+	/// After we have parsed the arguments, we expect a RIGHTPAREN
+	If pParser.Peek().Type '= "EOF" {
+		Set PartialCall = 0
+		/// We expected RPAREN, but got an EOF
+		Do pParser.Expect("RPAREN")
 	}
 
 	Return ##class(Auwais.FHIRPath.Expr.CallExpr).%New(pLeft, Args, PartialCall)
