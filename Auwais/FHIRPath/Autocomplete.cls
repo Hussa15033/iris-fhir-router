@@ -28,6 +28,7 @@ Method InorderTraversal(pExpr As Auwais.FHIRPath.Expr.Expression, ByRef pCtx As 
 
 	Set cls = $CLASSNAME(pExpr)
 	If cls = "Auwais.FHIRPath.Expr.BinaryExpr" {
+		Do pCtx.AdvanceOperator(pExpr.Op)
 		Do ..InorderTraversal(pExpr.Left, pCtx, .finalTokenPrefix, .refWithinFunctionCall, withinFunctionCall)
 		Do ..InorderTraversal(pExpr.Right, pCtx, .finalTokenPrefix, .refWithinFunctionCall, withinFunctionCall)
 	} ElseIf cls = "Auwais.FHIRPath.Expr.IdentExpr" {

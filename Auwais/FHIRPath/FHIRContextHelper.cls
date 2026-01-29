@@ -118,7 +118,7 @@ Method TranslateFunctionToSuggestion(pFunctionName As %String) As %String
 	Quit pFunctionName _ "("
 }
 
-Method AdvanceFunction(pFunctionName As %String) As %Boolean
+Method AdvanceFunction(pFunctionName As %String, pIsOp As %Boolean = 0) As %Boolean
 {
 
 	Set fnName = $ZCVT(pFunctionName, "L")
@@ -145,7 +145,9 @@ Method AdvanceFunction(pFunctionName As %String) As %Boolean
 			Set types = $LISTFROMSTRING(..Fields.GetAt(iKey), ",")
 			For i=1:1:$LL(types) {
 				Set type = $LG(types, i)
-				Do replaceFields.SetAt(type, type _ ")")
+				Set fieldText = type
+				Set:'pIsOp fieldText = type _ ")"
+				Do replaceFields.SetAt(type, fieldText)
 			}
 			Set iKey = ..Fields.Next(iKey)
 		}
@@ -171,6 +173,13 @@ Method AdvanceFunction(pFunctionName As %String) As %Boolean
 	}
 
 	Quit 1
+}
+
+Method AdvanceOperator(pOp As %String) As %Boolean
+{
+	If (pOp = "as") {
+		Quit ..AdvanceFunction("as", 1)
+	}
 }
 
 Method AdvanceContext(pNextField As %String, pIsFunction As %Boolean = 0) As %Boolean
