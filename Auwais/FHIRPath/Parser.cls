@@ -63,6 +63,7 @@ ClassMethod ParseString(pInput As %String) As Auwais.FHIRPath.Parser
 	Do parser.RegisterPrefix("IDENT", ##class(Auwais.FHIRPath.Parselet.IdentParselet).%New())
 	Do parser.RegisterPrefix("LPAREN", ##class(Auwais.FHIRPath.Parselet.GroupParselet).%New())
 	Do parser.RegisterPrefix("MINUS", ##class(Auwais.FHIRPath.Parselet.UnaryParselet).%New(130))
+	Do parser.RegisterPrefix("STRING", ##class(Auwais.FHIRPath.Parselet.StringParselet).%New())
 
 	Do parser.RegisterInfix("GT", ##class(Auwais.FHIRPath.Parselet.BinaryOpParselet).%New(5))
 	Do parser.RegisterInfix("GTE", ##class(Auwais.FHIRPath.Parselet.BinaryOpParselet).%New(5))

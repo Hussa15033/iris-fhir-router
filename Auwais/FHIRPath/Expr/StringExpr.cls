@@ -1,0 +1,12 @@
+Class Auwais.FHIRPath.Expr.StringExpr Extends Expression
+{
+
+Property Value As %String;
+
+Method %OnNew(pValue As %String) As %Status
+{
+	Set ..Value = pValue
+	Return $$$OK
+}
+
+}

@@ -41,6 +41,8 @@ Method %OnNew(pInput As %String) As %Status
 			Set t1 = ##class(Auwais.FHIRPath.Tokens.Token).%New("LPAREN")
 		} ElseIf (token.idName = "[") {
 			Set t1 = ##class(Auwais.FHIRPath.Tokens.Token).%New("LSQRBRACKET")
+		} ElseIf (token.literalType = "string") {
+			Set t1 = ##class(Auwais.FHIRPath.Tokens.Token).%New("STRING",,token.idName)
 		} ElseIf (token.literalType = "integer") || (token.literalType = "decimal") {
 			Set t1 = ##class(Auwais.FHIRPath.Tokens.Token).%New("NUMBER",,token.idName)
 		} Else {
