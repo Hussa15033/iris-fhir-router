@@ -143,6 +143,12 @@ Method AdvanceFunction(pFunctionName As %String) As %Boolean
 			}
 			Set iKey = ..Fields.Next(iKey)
 		}
+	} ElseIf (fnName = "oftype") || (fnName = "is") {
+		/// Select all types from SQL
+		Set tRS = ##class(%SQL.Statement).%ExecDirect(,"SELECT DISTINCT(type) FROM HS_FHIRMeta_Storage.Rsrc WHERE coreVersion=? AND (kind='resource' OR kind='complex-type' OR kind='primitive-type')", "4.0.1")
+		While tRS.%Next() {
+			Do ..Fields.SetAt(tRS.%Get("type"), tRS.%Get("type"))
+		}
 	}
 
 
@@ -213,7 +219,9 @@ Method AdvanceContext(pNextField As %String, pIsFunction As %Boolean = 0) As %Bo
 		Set part = $LISTFROMSTRING(nKey, ".")
 		If ($LG(part, 1) = pNextField) {
 			If ($LL(part) > 2) {
-				Throw ##class(%Exception.General).%New("More than 1 hanging field found","-30344",,)
+				#; w nKey,!
+				#; Throw ##class(%Exception.General).%New("More than 1 hanging field found","-30344",,)
+				/// Ignore this case, e.g. entry.request.extension within a 'Bundle'
 			} ElseIf ($LL(part) = 2) {
 				/// The 2nd element is hanging
 				#; Write "Set hanging field " _ ..Fields.GetAt(nKey)
@@ -263,7 +271,8 @@ Method GetFunctionsList() As %ListOfDataTypes
 {
 	Set fns = ##class(%ListOfDataTypes).%New()
 
-	If ..IsCollection {
+	/// Todo: Modify this IF statement, if all outputs are truly collections
+	If ..IsCollection||1 {
 		/// Add collection functions
 		Do fns.Insert(..TranslateFunctionToSuggestion("where"))
 		Do fns.Insert(..TranslateFunctionToSuggestion("exists"))
