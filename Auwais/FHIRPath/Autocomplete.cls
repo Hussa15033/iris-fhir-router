@@ -119,7 +119,8 @@ Method Suggest(pExpression As %String) As %ListOfDataTypes
 	}
 
 	For i=1:1:fnList.Size {
-		Continue:withinFnCall
+		/// Commented out -- maybe needed?
+		#; Continue:withinFnCall
 		If ($EXTRACT(fnList.GetAt(i), 1, $L(lastTokenFilter)) = lastTokenFilter) {
 			Do outputList.Insert(fnList.GetAt(i))
 		}

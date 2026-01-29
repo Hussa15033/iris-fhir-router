@@ -124,9 +124,14 @@ Method AdvanceFunction(pFunctionName As %String) As %Boolean
 
 	/// Special cases
 	If (fnName = "aggregate") {
-		Do ..AvailableFields.Insert("$this")
-		Do ..AvailableFields.Insert("$total")
+		/// TODO: Perhaps don't need to use ..AvailableFields, should be enough to set the
+		/// type of the field to "" within ..Fields
 		Do ..AvailableFields.Insert("iif(")
+		Do ..Fields.SetAt("", "$this")
+		Do ..Fields.SetAt("", "$total")
+
+		Do ..CollectionFields.Insert("$this")
+		Do ..CollectionFields.Insert("$total")
 	} ElseIf (fnName = "as") {
 		/// We want to enumerate the types of all fields
 		Set iKey = ..Fields.Next("")
@@ -163,8 +168,16 @@ Method AdvanceContext(pNextField As %String, pIsFunction As %Boolean = 0) As %Bo
 	Set validNextTypes = $LISTFROMSTRING(..Fields.GetAt(pNextField), ",")
 
 	#; W pNextField,!,"Types: "_..Fields.GetAt(pNextField),!,!
-	Set:$LL(validNextTypes)=0 tSC = $$$ERROR($$$GeneralError, "Field '" _ pNextField _ "' is not valid within this context")
-	Quit:$LL(validNextTypes)=0 0
+	Set fieldDefined = ..Fields.IsDefined(pNextField)
+	If (fieldDefined = 0) {
+		#; Set tSC = $$$ERROR($$$GeneralError, "Field '" _ pNextField _ "' is not valid within this context")
+		Quit 0
+	}
+
+	Set ..IsCollection = 0
+	If (..CollectionFields.Find(pNextField) '= "") {
+		Set ..IsCollection = 1
+	}
 
 	If $LL(validNextTypes)=1 {
 		Set nextType = $LG(validNextTypes, 1)
@@ -213,11 +226,6 @@ Method AdvanceContext(pNextField As %String, pIsFunction As %Boolean = 0) As %Bo
 		}
 
 		Set nKey = ..Fields.Next(nKey)
-	}
-
-	Set ..IsCollection = 0
-	If (..CollectionFields.Find(pNextField) '= "") {
-		Set ..IsCollection = 1
 	}
 
 	Set sd = {}.%FromJSON(tRS.%Get("json"))
