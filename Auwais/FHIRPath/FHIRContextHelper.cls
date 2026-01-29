@@ -283,6 +283,9 @@ Method GetFunctionsList() As %ListOfDataTypes
 		Do fns.Insert(..TranslateFunctionToSuggestion("tail"))
 		Do fns.Insert(..TranslateFunctionToSuggestion("take"))
 		Do fns.Insert(..TranslateFunctionToSuggestion("hasExtension"))
+		Do fns.Insert(..TranslateFunctionToSuggestion("ofType"))
+		Do fns.Insert(..TranslateFunctionToSuggestion("as"))
+		Do fns.Insert(..TranslateFunctionToSuggestion("is"))
 	}
 
 	If (..CurrentContext.kind = "primitive-type") {
