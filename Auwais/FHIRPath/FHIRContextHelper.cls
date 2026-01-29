@@ -101,7 +101,7 @@ Method LoadContext(pStructureDefinition As %DynamicObject) [ Private ]
 
 Method Reset()
 {
-	Set ..CurrentContext = ..ResourceContext
+	Do ..LoadContext(..ResourceContext)
 }
 
 Method TranslateFunctionToSuggestion(pFunctionName As %String) As %String
@@ -165,6 +165,11 @@ Method AdvanceFunction(pFunctionName As %String, pIsOp As %Boolean = 0) As %Bool
 		Set ..SingletonDataType = "STRING"
 	} ElseIf (fnName = "exists") {
 		Set ..SingletonDataType = "BOOLEAN"
+	} ElseIf (fnName = "union") {
+		Do ..Reset()
+
+		/// After resetting context, we add the current resource type to the list of available fields
+		Do ..Fields.SetAt(..ResourceContext.type, ..ResourceContext.type)
 	}
 
 
@@ -179,6 +184,8 @@ Method AdvanceOperator(pOp As %String) As %Boolean
 {
 	If (pOp = "as") {
 		Quit ..AdvanceFunction("as", 1)
+	} ElseIf (pOp = "|") {
+		Quit ..AdvanceFunction("union")
 	}
 }
 
@@ -310,6 +317,7 @@ Method GetFunctionsList() As %ListOfDataTypes
 		Do fns.Insert(..TranslateFunctionToSuggestion("as"))
 		Do fns.Insert(..TranslateFunctionToSuggestion("is"))
 		Do fns.Insert(..TranslateFunctionToSuggestion("resolve"))
+		Do fns.Insert(..TranslateFunctionToSuggestion("union"))
 	}
 
 	If ('..IsCollection) && (..SingletonDataType = "BOOLEAN") {
