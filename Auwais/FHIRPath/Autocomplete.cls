@@ -19,36 +19,7 @@ Method %OnNew(pValidResource = "") As %Status
 	Quit $$$OK
 }
 
-Method SearchPaths(pResourceType As %String, pSearchTerm As %String, ByRef paths As %ListOfDataTypes)
-{
-	Set tRS = ##class(%SQL.Statement).%ExecDirect(,"SELECT * FROM HS_FHIRMeta_Storage.Rsrc WHERE coreVersion=? AND id=type AND kind='resource' AND %UPPER(id)=?", "4.0.1", $ZCVT(pResourceType, "U"))
-	Quit:tRS.%Next()=0
-	Set obj = {}.%FromJSON(tRS.%Get("json"))
-
-
-	#dim elements As %DynamicArray
-	Set elements = obj.snapshot.element
-	Set iter = elements.iterator()
-
-	
-
-	While (iter.%GetNext(.key, .value)) {
-		Continue:($ZCVT($EXTRACT(value.path, 1, $L(pSearchTerm)), "L"))'=$ZCVT(pSearchTerm,"L")
-		Continue:(pResourceType = value.path)
-		If (value.path [ "[x]") {
-			/// Enumerate paths
-			Set types = value.type
-			Set typeIter = types.iterator()
-			While (typeIter.%GetNext(.key2, .value2)) {
-				Do paths.Insert($EXTRACT(value.path,$F(value.path, "."),*-3)_$ZCVT(value2.code, "w"))
-			}
-		} Else {
-			Do paths.Insert($EXTRACT(value.path, $F(value.path, "."),*))
-		}
-	}
-}
-
-Method InorderTraversal(pExpr As Auwais.FHIRPath.Expr.Expression, ByRef pCtx As Auwais.FHIRPath.FHIRContextHelper, ByRef finalTokenPrefix, ByRef refWithinFunctionCall = 0, withinFunctionCall = 0)
+Method InorderTraversal(pExpr As Auwais.FHIRPath.Expr.Expression, ByRef pCtx As Auwais.FHIRPath.Context.Helper, ByRef finalTokenPrefix, ByRef refWithinFunctionCall = 0, withinFunctionCall = 0)
 {
 	/// Reach a leaf node
 	If (pExpr = "") {
@@ -62,7 +33,7 @@ Method InorderTraversal(pExpr As Auwais.FHIRPath.Expr.Expression, ByRef pCtx As 
 	} ElseIf cls = "Auwais.FHIRPath.Expr.IdentExpr" {
 		Set finalTokenPrefix = pExpr.Name
 		Set refWithinFunctionCall = withinFunctionCall
-		Do pCtx.AdvanceContext(finalTokenPrefix, withinFunctionCall)
+		Do pCtx.AdvanceContext(finalTokenPrefix, 0)
 	} ElseIf cls = "Auwais.FHIRPath.Expr.PartialExpr" {
 		Set refWithinFunctionCall = withinFunctionCall
 		Set finalTokenPrefix = ""

@@ -30,13 +30,14 @@ Method %OnNew(pInput As %String) As %Status
 			"-":"MINUS",
 			"*":"STAR",
 			"/":"SLASH",
+			"as":"AS",
 			"]":"RSQRBRACKET",
 			"!=":"NOT_EQUALS",
 			"|":"UNION",
 			"EOT":"EOF",
 			:"")
 			Throw:opType="" ##class(%Exception.General).%New("No matching token for operator","-303282",,"Cannot handle operator '" _token.opName_"'")
-			Set t1 = ##class(Auwais.FHIRPath.Tokens.Token).%New(opType,,token.opName)
+			Set t1 = ##class(Auwais.FHIRPath.Tokens.Token).%New(opType,token.opName,token.opName)
 		} ElseIf (token.idName = "(") {
 			Set t1 = ##class(Auwais.FHIRPath.Tokens.Token).%New("LPAREN")
 		} ElseIf (token.idName = "[") {
