@@ -46,6 +46,7 @@ Method InorderTraversal(pExpr As Auwais.FHIRPath.Expr.Expression, ByRef pCtx As 
 		Do ..InorderTraversal(pExpr.Field, pCtx, .finalTokenPrefix, .refWithinFunctionCall, withinFunctionCall)
 	} ElseIf (cls = "Auwais.FHIRPath.Expr.NumberExpr") || (cls = "Auwais.FHIRPath.Expr.DecimalExpr") {
 	} ElseIf (cls = "Auwais.FHIRPath.Expr.StringExpr") {
+		Do pCtx.AdvanceString()
 	} ElseIf cls = "Auwais.FHIRPath.Expr.UnaryExpr" { 
 		Do ..InorderTraversal(pExpr.Expr, pCtx, .finalTokenPrefix, .refWithinFunctionCall, withinFunctionCall)
 	} Else {

@@ -16,7 +16,7 @@ Property IsCollection As %Boolean;
 Property WithinFunction As %String;
 
 /// Name of resource or primitive data type
-Property SingletonDataType As %String(VALUELIST = ",STRING,BOOLEAN");
+Property SingletonDataType As %String(VALUELIST = ",string,boolean");
 
 Property Status As %Status;
 
@@ -99,6 +99,12 @@ Method LoadContext(pStructureDefinition As %DynamicObject) [ Private ]
 	}
 }
 
+Method AdvanceString()
+{
+	Set ..IsCollection = 0
+	Set ..SingletonDataType = "string"
+}
+
 Method Reset()
 {
 	Do ..LoadContext(..ResourceContext)
@@ -162,9 +168,9 @@ Method AdvanceFunction(pFunctionName As %String, pIsOp As %Boolean = 0) As %Bool
 			Do ..Fields.SetAt(tRS.%Get("type"), tRS.%Get("type"))
 		}
 	} ElseIf(fnName = "empty") {
-		Set ..SingletonDataType = "STRING"
+		Set ..SingletonDataType = "string"
 	} ElseIf (fnName = "exists") {
-		Set ..SingletonDataType = "BOOLEAN"
+		Set ..SingletonDataType = "boolean"
 	} ElseIf (fnName = "union") {
 		Do ..Reset()
 
@@ -320,25 +326,27 @@ Method GetFunctionsList() As %ListOfDataTypes
 		Do fns.Insert(..TranslateFunctionToSuggestion("union"))
 	}
 
-	If ('..IsCollection) && (..SingletonDataType = "BOOLEAN") {
-		Do fns.Insert(..TranslateFunctionToSuggestion("not"))
+	Set primitiveType = ""
+	If (..CurrentContext.kind = "primitive-type") {
+		Set primitiveType = ..CurrentContext.type
+	} ElseIf ('..IsCollection) {
+		Set primitiveType = ..SingletonDataType
 	}
 
-	If (..CurrentContext.kind = "primitive-type") {
-		Set type = ..CurrentContext.type
-
-		If (type = "string") || (type = "code") {
-			Do fns.Insert(..TranslateFunctionToSuggestion("substring"))
-			Do fns.Insert(..TranslateFunctionToSuggestion("startsWith"))
-			Do fns.Insert(..TranslateFunctionToSuggestion("endsWith"))
-			Do fns.Insert(..TranslateFunctionToSuggestion("indexOf"))
-		} ElseIf (type = "date") {
-			/// No supported date/time functions
-		} Else {
-			Throw ##class(%Exception.General).%New("Cannot handle primitive type " _ type,"-303444",,"Failed to handle primitive data type '" _ type _ "' for autocomplete")
-		}
-	} Else {
+	If (primitiveType = "string") || (primitiveType = "code") {
+		Do fns.Insert(..TranslateFunctionToSuggestion("substring"))
+		Do fns.Insert(..TranslateFunctionToSuggestion("startsWith"))
+		Do fns.Insert(..TranslateFunctionToSuggestion("endsWith"))
+		Do fns.Insert(..TranslateFunctionToSuggestion("indexOf"))
+	} ElseIf (primitiveType = "boolean") {
+		Do fns.Insert(..TranslateFunctionToSuggestion("not"))
+	} ElseIf (primitiveType = "date") {
+		/// No supported date/time functions
+	} ElseIf (primitiveType = "") {
+		/// This is not a primitive type
 		Do fns.Insert("descendants()")
+	} Else {
+		Throw ##class(%Exception.General).%New("Cannot handle primitive type " _ type,"-303444",,"Failed to handle primitive data type '" _ type _ "' for autocomplete")
 	}
 
 	Return fns
