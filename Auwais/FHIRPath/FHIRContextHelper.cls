@@ -1,6 +1,13 @@
 Class Auwais.FHIRPath.FHIRContextHelper Extends %RegisteredObject
 {
 
+/// Todo: This class should be modified as follows:
+/// - Should be a class that can be used independently of the autocomplete engine
+/// - it's sole focus should be to hold the context to a FHIR resource/object
+/// - it should NOT have any knowledge of the full expression
+/// - it SHOULD have context of the root resource type
+/// - The Autocomplete class should deal with traversing the AST and updating field suggestions,
+///   NOT this class...
 Property ResourceContext As %DynamicObject;
 
 Property CurrentContext As %DynamicObject;
@@ -191,8 +198,12 @@ Method AdvanceOperator(pOp As %String) As %Boolean
 	If (pOp = "as") {
 		Quit ..AdvanceFunction("as", 1)
 	} ElseIf (pOp = "|") {
-		Quit ..AdvanceFunction("union")
+		Quit ..AdvanceFunction("union", 1)
+	} ElseIf (pOp = "is") {
+		Quit ..AdvanceFunction("is", 1)
 	}
+
+	Quit 0
 }
 
 Method AdvanceContext(pNextField As %String, pIsFunction As %Boolean = 0) As %Boolean

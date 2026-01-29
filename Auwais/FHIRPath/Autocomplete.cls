@@ -28,8 +28,11 @@ Method InorderTraversal(pExpr As Auwais.FHIRPath.Expr.Expression, ByRef pCtx As 
 
 	Set cls = $CLASSNAME(pExpr)
 	If cls = "Auwais.FHIRPath.Expr.BinaryExpr" {
-		Do pCtx.AdvanceOperator(pExpr.Op)
 		Do ..InorderTraversal(pExpr.Left, pCtx, .finalTokenPrefix, .refWithinFunctionCall, withinFunctionCall)
+
+		/// If we successfully advance the operator, it means the operator doubles as both
+		/// a function and operator, so we move within
+		Set:pCtx.AdvanceOperator(pExpr.Op) withinFunctionCall = 1
 		Do ..InorderTraversal(pExpr.Right, pCtx, .finalTokenPrefix, .refWithinFunctionCall, withinFunctionCall)
 	} ElseIf cls = "Auwais.FHIRPath.Expr.IdentExpr" {
 		Set finalTokenPrefix = pExpr.Name
