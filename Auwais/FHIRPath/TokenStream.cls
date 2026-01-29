@@ -31,6 +31,7 @@ Method %OnNew(pInput As %String) As %Status
 			"*":"STAR",
 			"/":"SLASH",
 			"as":"AS",
+			"is":"IS",
 			"]":"RSQRBRACKET",
 			"!=":"NOT_EQUALS",
 			"|":"UNION",

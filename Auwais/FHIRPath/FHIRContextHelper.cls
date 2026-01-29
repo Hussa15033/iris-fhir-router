@@ -135,15 +135,20 @@ Method AdvanceFunction(pFunctionName As %String) As %Boolean
 	} ElseIf (fnName = "as") {
 		/// We want to enumerate the types of all fields
 		Set iKey = ..Fields.Next("")
+		Set replaceFields = ##class(%ArrayOfDataTypes).%New()
 		While iKey '= "" {
 			Set types = $LISTFROMSTRING(..Fields.GetAt(iKey), ",")
 			For i=1:1:$LL(types) {
 				Set type = $LG(types, i)
-				Do ..Fields.SetAt(type, type _ ")")
+				Do replaceFields.SetAt(type, type _ ")")
 			}
 			Set iKey = ..Fields.Next(iKey)
 		}
+
+		Set ..Fields = replaceFields
 	} ElseIf (fnName = "oftype") || (fnName = "is") {
+		/// Todo: FHIRPath is case sensitive, make the necessary modifications to ensure all fields
+		/// properties and functions are case sensitive
 		/// Select all types from SQL
 		Set tRS = ##class(%SQL.Statement).%ExecDirect(,"SELECT DISTINCT(type) FROM HS_FHIRMeta_Storage.Rsrc WHERE coreVersion=? AND (kind='resource' OR kind='complex-type' OR kind='primitive-type')", "4.0.1")
 		While tRS.%Next() {
@@ -292,10 +297,10 @@ Method GetFunctionsList() As %ListOfDataTypes
 		Set type = ..CurrentContext.type
 
 		If (type = "string") || (type = "code") {
-			Do fns.Insert("substring")
-			Do fns.Insert("startsWith")
-			Do fns.Insert("endsWith")
-			Do fns.Insert("indexOf")
+			Do fns.Insert(..TranslateFunctionToSuggestion("substring"))
+			Do fns.Insert(..TranslateFunctionToSuggestion("startsWith"))
+			Do fns.Insert(..TranslateFunctionToSuggestion("endsWith"))
+			Do fns.Insert(..TranslateFunctionToSuggestion("indexOf"))
 		} ElseIf (type = "date") {
 			/// No supported date/time functions
 		} Else {
