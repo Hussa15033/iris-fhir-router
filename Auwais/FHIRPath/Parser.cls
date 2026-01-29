@@ -82,6 +82,7 @@ ClassMethod ParseString(pInput As %String) As Auwais.FHIRPath.Parser
 	Do parser.RegisterInfix("LOGIC_AND", ##class(Auwais.FHIRPath.Parselet.BinaryOpParselet).%New(108))
 	Do parser.RegisterInfix("LOGIC_OR", ##class(Auwais.FHIRPath.Parselet.BinaryOpParselet).%New(107))
 	Do parser.RegisterInfix("LOGIC_XOR", ##class(Auwais.FHIRPath.Parselet.BinaryOpParselet).%New(107))
+	Do parser.RegisterInfix("CONCAT", ##class(Auwais.FHIRPath.Parselet.BinaryOpParselet).%New(107))
 	Do parser.RegisterInfix("UNION", ##class(Auwais.FHIRPath.Parselet.BinaryOpParselet).%New(107))
 	Do parser.RegisterInfix("LSQRBRACKET", ##class(Auwais.FHIRPath.Parselet.IndexParselet).%New(120))
 	Do parser.RegisterInfix("AS", ##class(Auwais.FHIRPath.Parselet.BinaryOpParselet).%New(103))

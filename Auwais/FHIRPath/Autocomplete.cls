@@ -110,6 +110,8 @@ Method Suggest(pExpression As %String) As %ListOfDataTypes
 	Set suffix = ""
 	Set:withinFnCall=0 suffix = "."
 	
+	Quit:'$DATA(lastTokenFilter) outputList
+
 	/// Filter 
 	For i=1:1:propertyList.Size {
 		If ($EXTRACT(propertyList.GetAt(i), 1, $L(lastTokenFilter)) = lastTokenFilter) {

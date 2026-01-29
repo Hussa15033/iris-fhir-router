@@ -35,6 +35,7 @@ Method %OnNew(pInput As %String) As %Status
 			"as":"AS",
 			"is":"IS",
 			"]":"RSQRBRACKET",
+			"&":"CONCAT",
 			"!=":"NOT_EQUALS",
 			"|":"UNION",
 			"EOT":"EOF",
