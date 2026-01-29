@@ -21,6 +21,8 @@ Method %OnNew(pInput As %String) As %Status
 			"=":"EQUALS",
 			"and":"LOGIC_AND",
 			"or":"LOGIC_OR",
+			"xor":"LOGIC_XOR",
+			"implies":"LOGIC_IMPLIES",
 			"<":"LT",
 			"<=":"LTE",
 			">":"GT",

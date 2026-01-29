@@ -5,7 +5,7 @@
 Class Auwais.FHIRPath.TestParser Extends %RegisteredObject
 {
 
-ClassMethod RunOneTest(pI, pSearchTerm, pSuggestion) As %Boolean
+ClassMethod RunOneTest(pI, pSearchTerm, pSuggestion, pResourceFilter = "") As %Boolean
 {
 		Quit:(^AFPTestNumber'="")&&(pI'=^AFPTestNumber) 0
 		Write "Running test " _ pI _ "(" _ pSearchTerm _ ")"
@@ -17,7 +17,7 @@ ClassMethod RunOneTest(pI, pSearchTerm, pSuggestion) As %Boolean
 				Set pSuggestion = $EXTRACT(pSuggestion, 2, *)
 				Set isNegativeTest = 1
 			}
-			Set autocomplete = ##class(Auwais.FHIRPath.Autocomplete).%New()
+			Set autocomplete = ##class(Auwais.FHIRPath.Autocomplete).%New(pResourceFilter)
 
 			Set suggestionList = autocomplete.Suggest(pSearchTerm)
 
@@ -68,6 +68,15 @@ ClassMethod Test(pDebug = 0, pTestNumber = "")
 	Do ..RunOneTest(66, "Observation.component.where(value.ofTy", "ofType(")
 	Do ..RunOneTest(67, "Observation.component.where(value.as(P", "Period)")
 	Do ..RunOneTest(68, "Observation.component.where(value as Qu", "Quantity")
+	Do ..RunOneTest(69, "true or false", "", "Patient")
+	Do ..RunOneTest(70, "true xor false", "", "Patient")
+	Do ..RunOneTest(71, "true implies false", "", "Patient")
+	Do ..RunOneTest(72, "Practitioner.name[0] is Huma", "HumanName")
+	Do ..RunOneTest(73, "'string1' & ' and ' & 'string2'", "", "Patient")
+	Do ..RunOneTest(74, "5 seconds + 3 seconds", "", "Patient")
+	Do ..RunOneTest(75, "Patient.contact.telecom.where(use = 'official').ex", "exists()")
+	Do ..RunOneTest(76, "Patient.contact.telecom.where(use = 'official').ex", "!not()")
+	Do ..RunOneTest(77, "Patient.contact.telecom.where(use = 'official').exists().", "not()")
 	Do ..RunOneTest(1, "Patient.", "name.")
 	Do ..RunOneTest(2, "Patient.", "telecom.")
 	Do ..RunOneTest(3, "Patient.na", "name.")
@@ -102,7 +111,7 @@ ClassMethod Test(pDebug = 0, pTestNumber = "")
 	Do ..RunOneTest(32, "Observation.component.where(value.", "as(")
 	Do ..RunOneTest(33, "Condition.abatement.i", "is(")
 	Do ..RunOneTest(34, "Condition.abatement.is(", "dateTime")
-	Do ..RunOneTest(35, "Bundle.entry.resource.ofType(Patient).gender.n", "not()")
+	Do ..RunOneTest(35, "Bundle.entry.resource.ofType(Patient).gender.n", "!not()")
 	Do ..RunOneTest(36, "Bundle.entry.resource.ofType(P", "Patient")
 	Do ..RunOneTest(37, "Organization.partOf.re", "resolve()")
 	Do ..RunOneTest(38, "Bundle.entry.resource.ofType(Encounter).s", "skip(")
