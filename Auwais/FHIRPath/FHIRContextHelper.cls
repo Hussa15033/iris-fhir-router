@@ -15,6 +15,9 @@ Property IsCollection As %Boolean;
 
 Property WithinFunction As %String;
 
+/// Name of resource or primitive data type
+Property SingletonDataType As %String(VALUELIST = ",STRING,BOOLEAN");
+
 Property Status As %Status;
 
 Method %OnNew() As %Status
@@ -63,6 +66,7 @@ Method LoadContext(pStructureDefinition As %DynamicObject) [ Private ]
 	Do ..Fields.Clear()
 	Do ..CollectionFields.Clear()
 	Do ..AvailableFields.Clear()
+	Set ..SingletonDataType = ""
 
 	While (iter.%GetNext(.key, .value)) {
 		Continue:(value.path = pStructureDefinition.name) /// Ignore first element
@@ -105,7 +109,7 @@ Method TranslateFunctionToSuggestion(pFunctionName As %String) As %String
 	Set fnName = $ZCVT(pFunctionName, "L")
 
 	/// Functions that take no parameters
-	Set zeroParameterFunctions = $LISTFROMSTRING("exists,empty,first,last,tail",",")
+	Set zeroParameterFunctions = $LISTFROMSTRING("exists,empty,first,last,tail,not,resolve",",")
 
 	/// Function that return a primitive, not a collection
 	Set primitiveFunctions = $LISTFROMSTRING("exists,empty",",")
@@ -121,6 +125,7 @@ Method AdvanceFunction(pFunctionName As %String) As %Boolean
 	
 	/// Function that return a primitive, not a collection
 	Set primitiveFunctions = $LISTFROMSTRING("exists,empty",",")
+	Set ..SingletonDataType = ""
 
 	/// Special cases
 	If (fnName = "aggregate") {
@@ -154,6 +159,10 @@ Method AdvanceFunction(pFunctionName As %String) As %Boolean
 		While tRS.%Next() {
 			Do ..Fields.SetAt(tRS.%Get("type"), tRS.%Get("type"))
 		}
+	} ElseIf(fnName = "empty") {
+		Set ..SingletonDataType = "STRING"
+	} ElseIf (fnName = "exists") {
+		Set ..SingletonDataType = "BOOLEAN"
 	}
 
 
@@ -291,6 +300,11 @@ Method GetFunctionsList() As %ListOfDataTypes
 		Do fns.Insert(..TranslateFunctionToSuggestion("ofType"))
 		Do fns.Insert(..TranslateFunctionToSuggestion("as"))
 		Do fns.Insert(..TranslateFunctionToSuggestion("is"))
+		Do fns.Insert(..TranslateFunctionToSuggestion("resolve"))
+	}
+
+	If ('..IsCollection) && (..SingletonDataType = "BOOLEAN") {
+		Do fns.Insert(..TranslateFunctionToSuggestion("not"))
 	}
 
 	If (..CurrentContext.kind = "primitive-type") {
