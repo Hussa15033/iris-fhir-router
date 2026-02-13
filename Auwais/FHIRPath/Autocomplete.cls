@@ -32,6 +32,7 @@ Method InorderTraversal(pExpr As Auwais.FHIRPath.Expr.Expression, ByRef pCtx As 
 
 		/// If we successfully advance the operator, it means the operator doubles as both
 		/// a function and operator, so we move within
+		Set opSuccess = pCtx.AdvanceOperator(pExpr.Op)
 		Set:pCtx.AdvanceOperator(pExpr.Op) withinFunctionCall = 1
 		Do ..InorderTraversal(pExpr.Right, pCtx, .finalTokenPrefix, .refWithinFunctionCall, withinFunctionCall)
 	} ElseIf cls = "Auwais.FHIRPath.Expr.IdentExpr" {
@@ -44,7 +45,15 @@ Method InorderTraversal(pExpr As Auwais.FHIRPath.Expr.Expression, ByRef pCtx As 
 		#; Do pCtx.AdvanceContext(pExpr.Value)
 	} ElseIf cls = "Auwais.FHIRPath.Expr.CallExpr" {
 		Do pCtx.AdvanceContext(pExpr.Callee.Name, 1)
+		/// Todo: Need a better way of reverting context after function call
+		Set contextPrior = pCtx.CurrentContext
 		Do ..InorderTraversal(pExpr.Args.GetAt(pExpr.Args.Size), pCtx, .finalTokenPrefix, .refWithinFunctionCall, 1)
+		#; Write "Loading context prior to call: " _ pExpr.Callee.Name
+		
+
+		/// If the function call is not partial (i.e the function call has a closing ')'),
+		/// then we revert back to the original context
+		Do:pExpr.Partial=0 pCtx.LoadContext(contextPrior)
 	} ElseIf cls = "Auwais.FHIRPath.Expr.IndexExpr" {
 		Do ..InorderTraversal(pExpr.Field, pCtx, .finalTokenPrefix, .refWithinFunctionCall, withinFunctionCall)
 	} ElseIf (cls = "Auwais.FHIRPath.Expr.NumberExpr") || (cls = "Auwais.FHIRPath.Expr.DecimalExpr") {

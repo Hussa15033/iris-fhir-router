@@ -59,8 +59,9 @@ Method AddFieldType(pName, pType)
 	Do ..Fields.SetAt(newType, pName)
 }
 
-Method LoadContext(pStructureDefinition As %DynamicObject) [ Private ]
+Method LoadContext(pStructureDefinition As %DynamicObject)
 {
+	#; Write "Loading new context...",!
 	/// Loads the context of a different structure into this helper
 	Set ..CurrentContext = pStructureDefinition
 	
@@ -73,7 +74,9 @@ Method LoadContext(pStructureDefinition As %DynamicObject) [ Private ]
 	Do ..Fields.Clear()
 	Do ..CollectionFields.Clear()
 	Do ..AvailableFields.Clear()
-	Set ..SingletonDataType = ""
+
+	
+	//Set ..SingletonDataType = ""
 
 	While (iter.%GetNext(.key, .value)) {
 		Continue:(value.path = pStructureDefinition.name) /// Ignore first element
@@ -177,6 +180,8 @@ Method AdvanceFunction(pFunctionName As %String, pIsOp As %Boolean = 0) As %Bool
 	} ElseIf(fnName = "empty") {
 		Set ..SingletonDataType = "string"
 	} ElseIf (fnName = "exists") {
+		#; Write "Modified singleton type to bool"
+		Set ..IsCollection = 0
 		Set ..SingletonDataType = "boolean"
 	} ElseIf (fnName = "union") {
 		Do ..Reset()
@@ -198,7 +203,13 @@ Method AdvanceOperator(pOp As %String) As %Boolean
 	If (pOp = "as") {
 		Quit ..AdvanceFunction("as", 1)
 	} ElseIf (pOp = "|") {
-		Quit ..AdvanceFunction("union", 1)
+		/// todo: Bad design for this method, this method tricks the caller into thinking the pOp
+		/// parameter was NOT a function when it is. This is for nicer autocomplete suggestion
+		/// i.e
+		///		- "Practitioner.name[0] is HumanN" should suggest "HumanName" NOT "HumanName."
+		///		- "Practitioner.name.family | Pra" should suggest "Practitioner." NOT "Practitioner"
+		Do ..AdvanceFunction("union", 1)
+		Quit 0
 	} ElseIf (pOp = "is") {
 		Quit ..AdvanceFunction("is", 1)
 	}
@@ -208,6 +219,7 @@ Method AdvanceOperator(pOp As %String) As %Boolean
 
 Method AdvanceContext(pNextField As %String, pIsFunction As %Boolean = 0) As %Boolean
 {
+	#; Write !,"Advancing " _ pNextField _ "..."
 	/// Switch the FHIR context helper to the context
 	/// specified by pNextField
 	If (pIsFunction) {
@@ -302,6 +314,7 @@ Method GetPropertyList() As %ListOfDataTypes
 	Set k = ..Fields.Next("")
 	While k '= "" {
 		Do props.Insert(k)
+		#; Write "Looping through properties..." _ k,!
 		Set k = ..Fields.Next(k)
 	}
 
@@ -338,12 +351,18 @@ Method GetFunctionsList() As %ListOfDataTypes
 	}
 
 	Set primitiveType = ""
-	If (..CurrentContext.kind = "primitive-type") {
-		Set primitiveType = ..CurrentContext.type
-	} ElseIf ('..IsCollection) {
+
+	#; Write !,"Singletondatatype: "_..SingletonDataType,!
+	If ('..IsCollection) && (..SingletonDataType '= "") {
 		Set primitiveType = ..SingletonDataType
+	} ElseIf (..CurrentContext.kind = "primitive-type") {
+		Set primitiveType = ..CurrentContext.type
 	}
 
+	#; Write !,..SingletonDataType,!,!,!
+	#; Write ..CurrentContext.type
+
+	#; w !,"Primtype: " _ primitiveType,!
 	If (primitiveType = "string") || (primitiveType = "code") {
 		Do fns.Insert(..TranslateFunctionToSuggestion("substring"))
 		Do fns.Insert(..TranslateFunctionToSuggestion("startsWith"))
