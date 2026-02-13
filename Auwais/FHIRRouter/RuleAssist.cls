@@ -79,7 +79,7 @@ ClassMethod RuntimeConstraintCheck(ByRef pArray, pContext, Output pPassed = 0) A
 
 	Set tSource=$G(pArray("source"))
 	If (""'=tSource&&(tSource'=pContext.Source)) {
-		Set pArray("constraintErrorMsg") = "Message source is not '" _ pContext.Source _ "'"
+		Set pArray("constraintErrorMsg") = "Message source is not '" _ tSource _ "'"
 		Quit $$$OK
 	}
 
