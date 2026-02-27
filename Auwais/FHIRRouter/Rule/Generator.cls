@@ -1,4 +1,4 @@
-Class Auwais.FHIRRouter.Rule.Generator Extends Ens.Rule.Generator
+Class FHIR.FHIRRouter.Rule.Generator Extends Ens.Rule.Generator
 {
 
 /// todo; Update FHIR version to NOT be fixed...
@@ -51,9 +51,13 @@ ClassMethod generateOneAction(pClassname As %String, variables As %String, pActi
 				do ..line("quit",pLevel)
 			}
 		} elseif ( pAction.type = "trace" ) {
+			// Old method to convert to ObjectScript:
+			// set tSC=##class(Ens.Rule.Model.expression).convertToCOS(pAction.value,.tExpression,.variables)
+			// quit:$$$ISERR(tSC)
+			
 			set tSC = ..generateFHIRPathEval(pAction.value, .tExpression, 0, pLevel)
 			return:'$$$ISOK(tSC) tSC
-			#; set tSC=##class(Ens.Rule.Model.expression).convertToCOS(pAction.value,.tExpression,.variables) quit:$$$ISERR(tSC)
+
 			do ..line("do ##class(Ens.Util.Trace).WriteTrace(""user"",$$$CurrentClass,$$$CurrentMethod,"_tExpression_")",pLevel)
 		} elseif ( pAction.type = "debug" ) {
 			set tSC = ..generateFHIRPathEval(pAction.value, .tExpression, 0, pLevel)

@@ -1,4 +1,4 @@
-Class Auwais.FHIRPath.Expr.BinaryExpr Extends Expression
+Class FHIR.FHIRPath.Expr.BinaryExpr Extends Expression
 {
 
 Property Left As Expression;

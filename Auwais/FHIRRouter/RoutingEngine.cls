@@ -1,4 +1,4 @@
-Class Auwais.FHIRRouter.RoutingEngine Extends EnsLib.MsgRouter.RoutingEngine [ ClassType = persistent ]
+Class FHIR.FHIRRouter.RoutingEngine Extends EnsLib.MsgRouter.RoutingEngine [ ClassType = persistent ]
 {
 
 Property FHIRJSON As %DynamicObject;
@@ -25,7 +25,7 @@ Storage Default
 <Data name="FHIRJSON">
 <Attribute>FHIRJSON</Attribute>
 <Structure>node</Structure>
-<Subscript>"Auwais.FHIRRouter.RoutingEngine.FHIRJSON"</Subscript>
+<Subscript>"FHIR.FHIRRouter.RoutingEngine.FHIRJSON"</Subscript>
 </Data>
 <Type>%Storage.Persistent</Type>
 }

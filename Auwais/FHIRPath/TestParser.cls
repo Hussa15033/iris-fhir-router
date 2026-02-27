@@ -2,7 +2,7 @@
 /// This class is used for testing the FHIRPath Parser
 /// It contains various test cases to see if
 /// the autocompletion feature works
-Class Auwais.FHIRPath.TestParser Extends %RegisteredObject
+Class FHIR.FHIRPath.TestParser Extends %RegisteredObject
 {
 
 ClassMethod RunOneTest(pI, pSearchTerm, pSuggestion, pResourceFilter = "") As %Boolean
@@ -17,7 +17,7 @@ ClassMethod RunOneTest(pI, pSearchTerm, pSuggestion, pResourceFilter = "") As %B
 				Set pSuggestion = $EXTRACT(pSuggestion, 2, *)
 				Set isNegativeTest = 1
 			}
-			Set autocomplete = ##class(Auwais.FHIRPath.Autocomplete).%New(pResourceFilter)
+			Set autocomplete = ##class(FHIR.FHIRPath.Autocomplete).%New(pResourceFilter)
 
 			Set suggestionList = autocomplete.Suggest(pSearchTerm)
 

@@ -1,4 +1,4 @@
-Class Auwais.FHIRPath.Expr.IndexExpr Extends Expression
+Class FHIR.FHIRPath.Expr.IndexExpr Extends Expression
 {
 
 Property Field As Expression;

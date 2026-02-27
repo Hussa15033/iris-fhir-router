@@ -1,4 +1,4 @@
-Class Auwais.FHIRPath.Parselet.Infix Extends %RegisteredObject [ Abstract ]
+Class FHIR.FHIRPath.Parselet.Infix Extends %RegisteredObject [ Abstract ]
 {
 
 Property Precedence As %Integer;
@@ -8,7 +8,7 @@ Method Precedence() As %Integer
 	Return ..Precedence
 }
 
-Method Parse(pParser As Auwais.FHIRPath.Parser, pLeft As Auwais.FHIRPath.Expr.Expression, pToken As Auwais.FHIRPath.Tokens.Token) [ Abstract ]
+Method Parse(pParser As FHIR.FHIRPath.Parser, pLeft As FHIR.FHIRPath.Expr.Expression, pToken As FHIR.FHIRPath.Tokens.Token) [ Abstract ]
 {
 }
 

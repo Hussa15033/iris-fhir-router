@@ -1,4 +1,4 @@
-Class Auwais.FHIRPath.Expr.IdentExpr Extends Expression
+Class FHIR.FHIRPath.Expr.IdentExpr Extends Expression
 {
 
 Property Name As %String;

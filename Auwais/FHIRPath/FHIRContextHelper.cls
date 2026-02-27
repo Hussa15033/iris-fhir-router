@@ -1,4 +1,4 @@
-Class Auwais.FHIRPath.FHIRContextHelper Extends %RegisteredObject
+Class FHIR.FHIRPath.FHIRContextHelper Extends %RegisteredObject
 {
 
 /// Todo: This class should be modified as follows:
@@ -33,13 +33,13 @@ Method %OnNew() As %Status
 	Quit $$$OK
 }
 
-ClassMethod BuildResourceContext(pResource As %String) As Auwais.FHIRPath.FHIRContextHelper
+ClassMethod BuildResourceContext(pResource As %String) As FHIR.FHIRPath.FHIRContextHelper
 {
 	Set tRS = ##class(%SQL.Statement).%ExecDirect(,"SELECT * FROM HS_FHIRMeta_Storage.Rsrc WHERE coreVersion=? AND id=type AND kind='resource' AND %UPPER(id)=?", "4.0.1", $ZCVT(pResource, "U"))
 	Throw:tRS.%Next()=0 ##class(%Exception.General).%New("Resource '" _ pResource _ "' does not exist", "-20322",,"")
 	Set sd = {}.%FromJSON(tRS.%Get("json"))
 
-	Set ctx = ##class(Auwais.FHIRPath.FHIRContextHelper).%New()
+	Set ctx = ##class(FHIR.FHIRPath.FHIRContextHelper).%New()
 	Set ctx.ResourceContext = sd
 
 	Do ctx.LoadContext(sd)

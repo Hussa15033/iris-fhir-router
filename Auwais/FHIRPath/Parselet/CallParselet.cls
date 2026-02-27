@@ -1,4 +1,4 @@
-Class Auwais.FHIRPath.Parselet.CallParselet Extends Infix
+Class FHIR.FHIRPath.Parselet.CallParselet Extends Infix
 {
 
 Method %OnNew(pPrecedence As %Integer) As %Status
@@ -7,7 +7,7 @@ Method %OnNew(pPrecedence As %Integer) As %Status
 	Quit $$$OK
 }
 
-Method Parse(pParser As Auwais.FHIRPath.Parser, pLeft As Auwais.FHIRPath.Expr.Expression, pToken As Auwais.FHIRPath.Tokens.Token) As Auwais.FHIRPath.Expr.Expression
+Method Parse(pParser As FHIR.FHIRPath.Parser, pLeft As FHIR.FHIRPath.Expr.Expression, pToken As FHIR.FHIRPath.Tokens.Token) As FHIR.FHIRPath.Expr.Expression
 {
 	Set PartialCall = 1
 	Set Args = ##class(%ListOfObjects).%New()
@@ -26,7 +26,7 @@ Method Parse(pParser As Auwais.FHIRPath.Parser, pLeft As Auwais.FHIRPath.Expr.Ex
 		Do pParser.Expect("RPAREN")
 	}
 
-	Return ##class(Auwais.FHIRPath.Expr.CallExpr).%New(pLeft, Args, PartialCall)
+	Return ##class(FHIR.FHIRPath.Expr.CallExpr).%New(pLeft, Args, PartialCall)
 }
 
 }

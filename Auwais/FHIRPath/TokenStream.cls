@@ -1,4 +1,4 @@
-Class Auwais.FHIRPath.TokenStream Extends %RegisteredObject
+Class FHIR.FHIRPath.TokenStream Extends %RegisteredObject
 {
 
 Property TokenIndex As %Integer [ InitialExpression = 1 ];
@@ -41,17 +41,17 @@ Method %OnNew(pInput As %String) As %Status
 			"EOT":"EOF",
 			:"")
 			Throw:opType="" ##class(%Exception.General).%New("No matching token for operator","-303282",,"Cannot handle operator '" _token.opName_"'")
-			Set t1 = ##class(Auwais.FHIRPath.Tokens.Token).%New(opType,token.opName,token.opName)
+			Set t1 = ##class(FHIR.FHIRPath.Tokens.Token).%New(opType,token.opName,token.opName)
 		} ElseIf (token.idName = "(") {
-			Set t1 = ##class(Auwais.FHIRPath.Tokens.Token).%New("LPAREN")
+			Set t1 = ##class(FHIR.FHIRPath.Tokens.Token).%New("LPAREN")
 		} ElseIf (token.idName = "[") {
-			Set t1 = ##class(Auwais.FHIRPath.Tokens.Token).%New("LSQRBRACKET")
+			Set t1 = ##class(FHIR.FHIRPath.Tokens.Token).%New("LSQRBRACKET")
 		} ElseIf (token.literalType = "string") {
-			Set t1 = ##class(Auwais.FHIRPath.Tokens.Token).%New("STRING",,token.idName)
+			Set t1 = ##class(FHIR.FHIRPath.Tokens.Token).%New("STRING",,token.idName)
 		} ElseIf (token.literalType = "integer") || (token.literalType = "decimal") {
-			Set t1 = ##class(Auwais.FHIRPath.Tokens.Token).%New("NUMBER",,token.idName)
+			Set t1 = ##class(FHIR.FHIRPath.Tokens.Token).%New("NUMBER",,token.idName)
 		} Else {
-			Set t1 = ##class(Auwais.FHIRPath.Tokens.Token).%New("IDENT",token.idName)
+			Set t1 = ##class(FHIR.FHIRPath.Tokens.Token).%New("IDENT",token.idName)
 		}
 
 		Do ..Tokens.Insert(t1)
@@ -60,7 +60,7 @@ Method %OnNew(pInput As %String) As %Status
 	Quit $$$OK
 }
 
-Method Peek() As Auwais.FHIRPath.Tokens.Token
+Method Peek() As FHIR.FHIRPath.Tokens.Token
 {
 	If (..TokenIndex > ..Tokens.Size) {
 		Set ..TokenIndex = ..Tokens.Size
@@ -68,7 +68,7 @@ Method Peek() As Auwais.FHIRPath.Tokens.Token
 	Return ..Tokens.GetAt(..TokenIndex)
 }
 
-Method Consume() As Auwais.FHIRPath.Tokens.Token
+Method Consume() As FHIR.FHIRPath.Tokens.Token
 {
 	Set token = ..Peek()
 	Set ..TokenIndex = ..TokenIndex + 1
@@ -85,7 +85,7 @@ Method Match(pTokenType As %String) As %Boolean
 	Return 1
 }
 
-Method Expect(pTokenType As %String) As Auwais.FHIRPath.Tokens.Token
+Method Expect(pTokenType As %String) As FHIR.FHIRPath.Tokens.Token
 {
 	If (..Peek().Type '= pTokenType) {
 		Throw ##class(%Exception.General).%New("Expected " _ pTokenType,"-302",,"Expected " _ pTokenType _ " but got " _ ..Peek().Type)

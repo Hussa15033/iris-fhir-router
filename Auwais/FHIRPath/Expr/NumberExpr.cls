@@ -1,4 +1,4 @@
-Class Auwais.FHIRPath.Expr.NumberExpr Extends Expression
+Class FHIR.FHIRPath.Expr.NumberExpr Extends Expression
 {
 
 Property Value As %Integer;

@@ -1,4 +1,4 @@
-Class Auwais.FHIRPath.Parselet.UnaryParselet Extends Prefix
+Class FHIR.FHIRPath.Parselet.UnaryParselet Extends Prefix
 {
 
 Property Op As %String;
@@ -11,10 +11,10 @@ Method %OnNew(pPrecedence As %Integer) As %Status
 	Quit $$$OK
 }
 
-Method Parse(pParser As Auwais.FHIRPath.Parser, pToken As Auwais.FHIRPath.Tokens.Token) As Auwais.FHIRPath.Expr.Expression
+Method Parse(pParser As FHIR.FHIRPath.Parser, pToken As FHIR.FHIRPath.Tokens.Token) As FHIR.FHIRPath.Expr.Expression
 {
 	Set expr = pParser.Parse(..Precedence)
-	Return ##class(Auwais.FHIRPath.Expr.UnaryExpr).%New(pToken.Literal, expr)
+	Return ##class(FHIR.FHIRPath.Expr.UnaryExpr).%New(pToken.Literal, expr)
 }
 
 }

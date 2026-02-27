@@ -2,7 +2,7 @@
 * This class is an autocomplete function for FHIRPath
 */
 
-Class Auwais.FHIRPath.Autocomplete Extends %RegisteredObject
+Class FHIR.FHIRPath.Autocomplete Extends %RegisteredObject
 {
 
 Property Resource As %String;
@@ -19,7 +19,7 @@ Method %OnNew(pValidResource = "") As %Status
 	Quit $$$OK
 }
 
-Method InorderTraversal(pExpr As Auwais.FHIRPath.Expr.Expression, ByRef pCtx As Auwais.FHIRPath.Context.Helper, ByRef finalTokenPrefix, ByRef refWithinFunctionCall = 0, withinFunctionCall = 0)
+Method InorderTraversal(pExpr As FHIR.FHIRPath.Expr.Expression, ByRef pCtx As FHIR.FHIRPath.FHIRContextHelper, ByRef finalTokenPrefix, ByRef refWithinFunctionCall = 0, withinFunctionCall = 0)
 {
 	/// Reach a leaf node
 	If (pExpr = "") {
@@ -27,7 +27,7 @@ Method InorderTraversal(pExpr As Auwais.FHIRPath.Expr.Expression, ByRef pCtx As 
 	}
 
 	Set cls = $CLASSNAME(pExpr)
-	If cls = "Auwais.FHIRPath.Expr.BinaryExpr" {
+	If cls = "FHIR.FHIRPath.Expr.BinaryExpr" {
 		Do ..InorderTraversal(pExpr.Left, pCtx, .finalTokenPrefix, .refWithinFunctionCall, withinFunctionCall)
 
 		/// If we successfully advance the operator, it means the operator doubles as both
@@ -35,15 +35,15 @@ Method InorderTraversal(pExpr As Auwais.FHIRPath.Expr.Expression, ByRef pCtx As 
 		Set opSuccess = pCtx.AdvanceOperator(pExpr.Op)
 		Set:pCtx.AdvanceOperator(pExpr.Op) withinFunctionCall = 1
 		Do ..InorderTraversal(pExpr.Right, pCtx, .finalTokenPrefix, .refWithinFunctionCall, withinFunctionCall)
-	} ElseIf cls = "Auwais.FHIRPath.Expr.IdentExpr" {
+	} ElseIf cls = "FHIR.FHIRPath.Expr.IdentExpr" {
 		Set finalTokenPrefix = pExpr.Name
 		Set refWithinFunctionCall = withinFunctionCall
 		Do pCtx.AdvanceContext(finalTokenPrefix, 0)
-	} ElseIf cls = "Auwais.FHIRPath.Expr.PartialExpr" {
+	} ElseIf cls = "FHIR.FHIRPath.Expr.PartialExpr" {
 		Set refWithinFunctionCall = withinFunctionCall
 		Set finalTokenPrefix = ""
 		#; Do pCtx.AdvanceContext(pExpr.Value)
-	} ElseIf cls = "Auwais.FHIRPath.Expr.CallExpr" {
+	} ElseIf cls = "FHIR.FHIRPath.Expr.CallExpr" {
 		Do pCtx.AdvanceContext(pExpr.Callee.Name, 1)
 		/// Todo: Need a better way of reverting context after function call
 		Set contextPrior = pCtx.CurrentContext
@@ -54,12 +54,12 @@ Method InorderTraversal(pExpr As Auwais.FHIRPath.Expr.Expression, ByRef pCtx As 
 		/// If the function call is not partial (i.e the function call has a closing ')'),
 		/// then we revert back to the original context
 		Do:pExpr.Partial=0 pCtx.LoadContext(contextPrior)
-	} ElseIf cls = "Auwais.FHIRPath.Expr.IndexExpr" {
+	} ElseIf cls = "FHIR.FHIRPath.Expr.IndexExpr" {
 		Do ..InorderTraversal(pExpr.Field, pCtx, .finalTokenPrefix, .refWithinFunctionCall, withinFunctionCall)
-	} ElseIf (cls = "Auwais.FHIRPath.Expr.NumberExpr") || (cls = "Auwais.FHIRPath.Expr.DecimalExpr") {
-	} ElseIf (cls = "Auwais.FHIRPath.Expr.StringExpr") {
+	} ElseIf (cls = "FHIR.FHIRPath.Expr.NumberExpr") || (cls = "FHIR.FHIRPath.Expr.DecimalExpr") {
+	} ElseIf (cls = "FHIR.FHIRPath.Expr.StringExpr") {
 		Do pCtx.AdvanceString()
-	} ElseIf cls = "Auwais.FHIRPath.Expr.UnaryExpr" { 
+	} ElseIf cls = "FHIR.FHIRPath.Expr.UnaryExpr" { 
 		Do ..InorderTraversal(pExpr.Expr, pCtx, .finalTokenPrefix, .refWithinFunctionCall, withinFunctionCall)
 	} Else {
 		Throw ##class(%Exception.General).%New("Unable to handle class " _cls)
@@ -106,9 +106,9 @@ Method Suggest(pExpression As %String) As %ListOfDataTypes
 	/// Check if this resource exists
 	Set pathList = ##class(%ListOfDataTypes).%New()
 
-	Set ctx = ##class(Auwais.FHIRPath.FHIRContextHelper).BuildResourceContext(..Resource)
+	Set ctx = ##class(FHIR.FHIRPath.FHIRContextHelper).BuildResourceContext(..Resource)
 	
-	Set ast = ##class(Auwais.FHIRPath.Parser).ParseString(searchString)
+	Set ast = ##class(FHIR.FHIRPath.Parser).ParseString(searchString)
 
 	/// We want to start by advancing into the resource itself
 	Do ctx.AdvanceContext(..Resource)
@@ -148,7 +148,7 @@ Method Suggest(pExpression As %String) As %ListOfDataTypes
 
 ClassMethod Test(pExpr)
 {
-	Set a = ##class(Auwais.FHIRPath.Autocomplete).%New()
+	Set a = ##class(FHIR.FHIRPath.Autocomplete).%New()
 	Set l = a.Suggest(pExpr)
 	For i=1:1:l.Size {
 		Write l.GetAt(i),!

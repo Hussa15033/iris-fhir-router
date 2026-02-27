@@ -1,4 +1,4 @@
-Class Auwais.FHIRRouter.RuleAssist Extends EnsLib.MsgRouter.RuleAssist
+Class FHIR.FHIRRouter.RuleAssist Extends EnsLib.MsgRouter.RuleAssist
 {
 
 ClassMethod GetMetaData() As %String
@@ -13,7 +13,7 @@ ClassMethod GetDescription() As %String
 
 ClassMethod GetContextClass() As %String
 {
-	quit "Auwais.FHIRRouter.RoutingEngine"
+	quit "FHIR.FHIRRouter.RoutingEngine"
 }
 
 ClassMethod GetIsRoutingRule() As %String
@@ -51,7 +51,7 @@ ClassMethod GetQueryData(ByRef pArray, pParam) As %String
 ClassMethod GetPropertyList(ByRef pArray, pText) As %String
 {
 	#; Return "," _ pArray("segName") _ ",test"
-	Set autocomplete = ##class(Auwais.FHIRPath.Autocomplete).%New(pArray("resourceFilter"))
+	Set autocomplete = ##class(FHIR.FHIRPath.Autocomplete).%New(pArray("resourceFilter"))
 	Set pSearch = pText
 	Set:pSearch="" pSearch = pArray("segName")
 	Set pathList = autocomplete.Suggest(pSearch)

@@ -1,17 +1,17 @@
 /// 
-Class Auwais.FHIRRouter.RoutingRule Extends Ens.Rule.Definition
+Class FHIR.FHIRRouter.RoutingRule Extends Ens.Rule.Definition
 {
 
-Parameter RuleAssistClass = "Auwais.FHIRRouter.RuleAssist";
+Parameter RuleAssistClass = "FHIR.FHIRRouter.RuleAssist";
 
 ClassMethod evaluateRuleDefinition(pContext As %RegisteredObject, Output pRuleSet As %String, Output pEffectiveBegin As %String, Output pEffectiveEnd As %String, Output pReturnValue As %String, Output pReason As %String, pLogLevel As %String = {$$$eRuleLogTypeReturn}, pDebugId As %Integer = "") As %Status [ CodeMode = objectgenerator ]
 {
-	Quit ##class(Auwais.FHIRRouter.Rule.Generator).generateRuleDefinition(%compiledclass,%code)
+	Quit ##class(FHIR.FHIRRouter.Rule.Generator).generateRuleDefinition(%compiledclass,%code)
 }
 
 XData RuleDefinition [ XMLNamespace = "http://www.intersystems.com/rule" ]
 {
-<ruleDefinition alias="" context="Auwais.FHIRRouter.RoutingEngine" production="HCCDEMOPKG.FoundationProduction">
+<ruleDefinition alias="" context="FHIR.FHIRRouter.RoutingEngine" production="HCCDEMOPKG.FoundationProduction">
 <ruleSet name="" effectiveBegin="" effectiveEnd="">
 <rule name="Test Rule" disabled="false">
 <constraint name="source" value="FHIRRouter"></constraint>

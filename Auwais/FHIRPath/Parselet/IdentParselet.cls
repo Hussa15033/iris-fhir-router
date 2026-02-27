@@ -1,9 +1,9 @@
-Class Auwais.FHIRPath.Parselet.IdentParselet Extends Prefix
+Class FHIR.FHIRPath.Parselet.IdentParselet Extends Prefix
 {
 
-Method Parse(pParser As Auwais.FHIRPath.Parser, pToken As Auwais.FHIRPath.Tokens.Token) As Auwais.FHIRPath.Expr.Expression
+Method Parse(pParser As FHIR.FHIRPath.Parser, pToken As FHIR.FHIRPath.Tokens.Token) As FHIR.FHIRPath.Expr.Expression
 {
-	Return ##class(Auwais.FHIRPath.Expr.IdentExpr).%New(pToken.Lexeme)
+	Return ##class(FHIR.FHIRPath.Expr.IdentExpr).%New(pToken.Lexeme)
 }
 
 }

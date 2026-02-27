@@ -1,4 +1,4 @@
-Class Auwais.FHIRPath.Expr.DecimalExpr Extends Expression
+Class FHIR.FHIRPath.Expr.DecimalExpr Extends Expression
 {
 
 Property Value As %Decimal;

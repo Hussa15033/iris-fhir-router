@@ -1,7 +1,7 @@
-Class Auwais.FHIRPath.Parselet.Prefix Extends %RegisteredObject [ Abstract ]
+Class FHIR.FHIRPath.Parselet.Prefix Extends %RegisteredObject [ Abstract ]
 {
 
-Method Parse(pParser As Auwais.FHIRPath.Parser, pToken As Auwais.FHIRPath.Tokens.Token) As Auwais.FHIRPath.Expr.Expression [ Abstract ]
+Method Parse(pParser As FHIR.FHIRPath.Parser, pToken As FHIR.FHIRPath.Tokens.Token) As FHIR.FHIRPath.Expr.Expression [ Abstract ]
 {
 }
 
