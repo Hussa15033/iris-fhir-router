@@ -1,3 +1,8 @@
+///
+/// The RoutingEngine class itself. Can be extended to accept additional request message
+/// classes. The FHIRJSON property contains the raw FHIR json passed into the engine
+/// 
+/// @author Auwais Hussain (ahussain@intersystems.com)
 Class FHIR.FHIRRouter.RoutingEngine Extends EnsLib.MsgRouter.RoutingEngine [ ClassType = persistent ]
 {
 

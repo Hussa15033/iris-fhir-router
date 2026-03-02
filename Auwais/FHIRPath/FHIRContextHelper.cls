@@ -1,3 +1,12 @@
+///
+/// A helper function which keeps the context of a FHIRPath expression as we traverse through
+/// its AST. It uses the internal FHIR classes to perform lookups on StructureDefinition resources
+/// 
+/// Needs modifications so it is more efficient as current implementation was made as the
+/// parser was developed so tons of inefficiencies and unnecessary complexities in the code
+/// 
+/// @author Auwais Hussain (ahussain@intersystems.com)
+/// 
 Class FHIR.FHIRPath.FHIRContextHelper Extends %RegisteredObject
 {
 

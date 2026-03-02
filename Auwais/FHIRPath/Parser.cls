@@ -1,3 +1,13 @@
+///
+/// The parser class itself. The parser class uses Pratt parsing
+/// to parse the FHIRPath expression. This parser is extendible to other
+/// syntaxes, not just FHIRPath.
+/// 
+/// The <method>ParseString</method> method creates a FHIRPath expression parser,
+/// however similar parser could be created using the same setup process
+/// 
+/// @author Auwais Hussain (ahussain@intersystems.com)
+/// 
 Class FHIR.FHIRPath.Parser Extends %RegisteredObject
 {
 
@@ -59,6 +69,8 @@ ClassMethod ParseString(pInput As %String) As FHIR.FHIRPath.Parser
 
 	/// TODO: Add operator precedence according to the FHIRPath docs
 	/// https://hl7.org/fhirpath/#operator-precedence
+	/// Create the parsing rules for FHIRPath
+	/// NOTE: OPERATOR PRECEDENCE IS INCORRECT IN THIS IMPLEMENTATION AND IS ROUGH ESTIMATE
 	Do parser.RegisterPrefix("NUMBER", ##class(FHIR.FHIRPath.Parselet.NumberParselet).%New())
 	Do parser.RegisterPrefix("IDENT", ##class(FHIR.FHIRPath.Parselet.IdentParselet).%New())
 	Do parser.RegisterPrefix("LPAREN", ##class(FHIR.FHIRPath.Parselet.GroupParselet).%New())

@@ -1,3 +1,10 @@
+///
+/// Encapsulates a stream of tokens and converts them from the native FHIRPath
+/// parser into the custom parser created. All operators have been mapped as
+/// needed
+/// 
+/// @author Auwais Hussain (ahussain@intersystems.com)
+/// 
 Class FHIR.FHIRPath.TokenStream Extends %RegisteredObject
 {
 

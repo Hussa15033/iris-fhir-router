@@ -1,3 +1,9 @@
+///
+/// The RuleAssist class provides metadata to the rules editor over http
+/// Modify RuntimeConstraintsCheck() to add additional checks at runtime
+/// 
+/// @author Auwais Hussain (ahussain@intersystems.com)
+/// 
 Class FHIR.FHIRRouter.RuleAssist Extends EnsLib.MsgRouter.RuleAssist
 {
 

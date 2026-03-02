@@ -1,7 +1,16 @@
 /// /
 /// This class is used for testing the FHIRPath Parser
-/// It contains various test cases to see if
-/// the autocompletion feature works
+/// It contains various test cases to see if the autocompletion feature works
+/// as expected.
+/// 
+/// Run via
+/// 	##class(FHIR.FHIRPath.TestParser).Run()
+/// 
+/// To debug and run a specific test case, use:
+/// 	##class(FHIR.FHIRPath.TestParser).Run(1, <test-case-number>)
+///
+/// @author Auwais Hussain (ahussain@intersystems.com)
+/// 
 Class FHIR.FHIRPath.TestParser Extends %RegisteredObject
 {
 

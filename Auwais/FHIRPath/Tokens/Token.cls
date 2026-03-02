@@ -1,3 +1,7 @@
+/// A single token string used by the parser
+/// 
+/// Auwais Hussain (ahussain@intersystems.com)
+/// 
 Class FHIR.FHIRPath.Tokens.Token Extends %RegisteredObject
 {
 

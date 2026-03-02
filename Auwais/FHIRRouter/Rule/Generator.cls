@@ -1,3 +1,14 @@
+///
+/// The generator class which converts the rule XML into the corresponding objectscript code
+/// Much of these methods are copied from the parent "Ens.Rule.Generator" class.
+/// 
+/// Overridden functionality here expects all expressions to be valid FHIRPath expression - there is
+/// currently no fallback to ObjectScript code if the FHIRPath evaluation fails.
+/// 
+/// The generateFHIRPathEval() method generates the code to evaluate FHIR expressions on the go
+/// 
+/// @author Auwais Hussain (ahussain@intersystems.com)
+/// 
 Class FHIR.FHIRRouter.Rule.Generator Extends Ens.Rule.Generator
 {
 

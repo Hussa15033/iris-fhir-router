@@ -1,4 +1,5 @@
-/// 
+/// An example routing rule.
+/// When creating a new rule, the RuleAssistClass parameter should be modified
 Class FHIR.FHIRRouter.RoutingRule Extends Ens.Rule.Definition
 {
 

@@ -1,6 +1,8 @@
-/**
-* This class is an autocomplete function for FHIRPath
-*/
+///
+/// This class is an autocomplete function for FHIRPath.
+/// 
+/// Auwais Hussain (ahussain@intersystems.com)
+/// 
 
 Class FHIR.FHIRPath.Autocomplete Extends %RegisteredObject
 {
