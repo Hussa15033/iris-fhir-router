@@ -2,7 +2,7 @@
 /// An Infix parselet for providing functionality for infix operators, e.g.
 /// "+", "-", "/" ....
 /// 
-/// Auwais Hussain (ahussain@intersystems.com)
+/// @author Auwais Hussain (ahussain@intersystems.com)
 /// 
 Class FHIR.FHIRPath.Parselet.Infix Extends %RegisteredObject [ Abstract ]
 {

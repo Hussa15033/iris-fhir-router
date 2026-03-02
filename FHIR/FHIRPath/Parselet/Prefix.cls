@@ -1,7 +1,8 @@
 ///
 /// A parselet for providing prefix operator functionality
 /// e.g. "(", "-", ...
-/// Auwais Hussain (ahussain@intersystems.com)
+/// 
+/// @author Auwais Hussain (ahussain@intersystems.com)
 /// 
 Class FHIR.FHIRPath.Parselet.Prefix Extends %RegisteredObject [ Abstract ]
 {

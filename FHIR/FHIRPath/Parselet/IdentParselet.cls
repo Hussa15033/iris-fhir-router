@@ -1,3 +1,8 @@
+///
+/// A parselet to parse the tokens for an identity expression
+/// 
+/// @author Auwais Hussain (ahussain@intersystems.com)
+/// 
 Class FHIR.FHIRPath.Parselet.IdentParselet Extends Prefix
 {
 

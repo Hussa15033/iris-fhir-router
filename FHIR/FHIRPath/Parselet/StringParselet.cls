@@ -1,3 +1,8 @@
+///
+/// A parselet to parse the tokens for a literal expression
+/// 
+/// @author Auwais Hussain (ahussain@intersystems.com)
+/// 
 Class FHIR.FHIRPath.Parselet.StringParselet Extends Prefix
 {
 

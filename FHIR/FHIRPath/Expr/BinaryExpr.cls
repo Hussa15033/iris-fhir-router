@@ -1,3 +1,8 @@
+///
+/// A binary expression representation for the AST
+/// 
+/// @author Auwais Hussain (ahussain@intersystems.com)
+/// 
 Class FHIR.FHIRPath.Expr.BinaryExpr Extends Expression
 {
 

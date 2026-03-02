@@ -1,3 +1,8 @@
+///
+/// An identity expression representation for the AST
+/// 
+/// @author Auwais Hussain (ahussain@intersystems.com)
+/// 
 Class FHIR.FHIRPath.Expr.IdentExpr Extends Expression
 {
 

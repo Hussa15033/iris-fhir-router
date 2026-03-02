@@ -1,3 +1,8 @@
+///
+/// A parselet to parse the tokens for a binary expression
+/// 
+/// @author Auwais Hussain (ahussain@intersystems.com)
+/// 
 Class FHIR.FHIRPath.Parselet.BinaryOpParselet Extends Infix
 {
 

@@ -1,3 +1,8 @@
+///
+/// A parselet to parse a right assosciated binary expression
+/// 
+/// @author Auwais Hussain (ahussain@intersystems.com)
+/// 
 Class FHIR.FHIRPath.Parselet.RightAssocBinaryOpParselet Extends Infix
 {
 

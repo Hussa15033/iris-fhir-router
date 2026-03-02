@@ -1,3 +1,8 @@
+///
+/// A parselet to parse the tokens for an index expression
+/// 
+/// @author Auwais Hussain (ahussain@intersystems.com)
+/// 
 Class FHIR.FHIRPath.Parselet.IndexParselet Extends Infix
 {
 
