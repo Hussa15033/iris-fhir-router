@@ -1,4 +1,4 @@
-///
+/// 
 /// The parser class itself. The parser class uses Pratt parsing
 /// to parse the FHIRPath expression. This parser is extendible to other
 /// syntaxes, not just FHIRPath.
@@ -71,34 +71,79 @@ ClassMethod ParseString(pInput As %String) As FHIR.FHIRPath.Parser
 	/// https://hl7.org/fhirpath/#operator-precedence
 	/// Create the parsing rules for FHIRPath
 	/// NOTE: OPERATOR PRECEDENCE IS INCORRECT IN THIS IMPLEMENTATION AND IS ROUGH ESTIMATE
+
+	/// Ordered by operator precendence according to the FHIRPath specification:
+	/// https://hl7.org/fhirpath/#operator-precedence
+	/// Note: Website shows highest-lowest precedence
+
+	/// Commented register* calls below have not been implemented in the current IRIS
+	/// FHIRPath implementation
+
+	/// Function call is the highest
+	Do parser.RegisterInfix("LPAREN", ##class(FHIR.FHIRPath.Parselet.CallParselet).%New(15))
+	
+	/// 01
+	Do parser.RegisterInfix("DOT", ##class(FHIR.FHIRPath.Parselet.BinaryOpParselet).%New(13))
+
+	/// 02
+	Do parser.RegisterInfix("LSQRBRACKET", ##class(FHIR.FHIRPath.Parselet.IndexParselet).%New(12))
+
+	/// 03
+	Do parser.RegisterPrefix("MINUS", ##class(FHIR.FHIRPath.Parselet.UnaryParselet).%New(11))
+	Do parser.RegisterPrefix("PLUS", ##class(FHIR.FHIRPath.Parselet.UnaryParselet).%New(11))
+
+	/// 04
+	Do parser.RegisterInfix("MULTIPLY", ##class(FHIR.FHIRPath.Parselet.BinaryOpParselet).%New(10))
+	Do parser.RegisterInfix("DIVISION", ##class(FHIR.FHIRPath.Parselet.BinaryOpParselet).%New(10))
+	#; Do parser.RegisterInfix("DIV", ##class(FHIR.FHIRPath.Parselet.BinaryOpParselet).%New(10))
+	#; Do parser.RegisterInfix("MOD", ##class(FHIR.FHIRPath.Parselet.BinaryOpParselet).%New(10))
+
+	/// 05
+	Do parser.RegisterInfix("PLUS", ##class(FHIR.FHIRPath.Parselet.BinaryOpParselet).%New(9))
+	Do parser.RegisterInfix("MINUS", ##class(FHIR.FHIRPath.Parselet.BinaryOpParselet).%New(9))
+	Do parser.RegisterInfix("CONCAT", ##class(FHIR.FHIRPath.Parselet.BinaryOpParselet).%New(9))
+
+	/// 06
+	Do parser.RegisterInfix("AS", ##class(FHIR.FHIRPath.Parselet.BinaryOpParselet).%New(8))
+	Do parser.RegisterInfix("IS", ##class(FHIR.FHIRPath.Parselet.BinaryOpParselet).%New(8))
+	
+	/// 07
+	Do parser.RegisterInfix("UNION", ##class(FHIR.FHIRPath.Parselet.BinaryOpParselet).%New(7))
+
+	/// 08
+	Do parser.RegisterInfix("GT", ##class(FHIR.FHIRPath.Parselet.BinaryOpParselet).%New(6))
+	Do parser.RegisterInfix("GTE", ##class(FHIR.FHIRPath.Parselet.BinaryOpParselet).%New(6))
+	Do parser.RegisterInfix("LT", ##class(FHIR.FHIRPath.Parselet.BinaryOpParselet).%New(6))
+	Do parser.RegisterInfix("LTE", ##class(FHIR.FHIRPath.Parselet.BinaryOpParselet).%New(6))
+
+	/// 09
+	Do parser.RegisterInfix("EQUALS", ##class(FHIR.FHIRPath.Parselet.BinaryOpParselet).%New(5))
+	Do parser.RegisterInfix("NOT_EQUALS", ##class(FHIR.FHIRPath.Parselet.BinaryOpParselet).%New(5))
+	#; Do parser.RegisterInfix("EQUIV", ##class(FHIR.FHIRPath.Parselet.BinaryOpParselet).%New(5))
+	#; Do parser.RegisterInfix("NOT_EQUIV", ##class(FHIR.FHIRPath.Parselet.BinaryOpParselet).%New(5))
+
+	/// 10
+	Do parser.RegisterInfix("IN", ##class(FHIR.FHIRPath.Parselet.BinaryOpParselet).%New(4))
+	Do parser.RegisterInfix("CONTAINS", ##class(FHIR.FHIRPath.Parselet.BinaryOpParselet).%New(4))
+
+	/// 11
+	Do parser.RegisterInfix("LOGIC_AND", ##class(FHIR.FHIRPath.Parselet.BinaryOpParselet).%New(3))
+
+	/// 12
+	Do parser.RegisterInfix("LOGIC_OR", ##class(FHIR.FHIRPath.Parselet.BinaryOpParselet).%New(2))
+	Do parser.RegisterInfix("LOGIC_XOR", ##class(FHIR.FHIRPath.Parselet.BinaryOpParselet).%New(2))
+
+	/// 13
+	Do parser.RegisterInfix("LOGIC_IMPLIES", ##class(FHIR.FHIRPath.Parselet.BinaryOpParselet).%New(1))
+
 	Do parser.RegisterPrefix("NUMBER", ##class(FHIR.FHIRPath.Parselet.NumberParselet).%New())
 	Do parser.RegisterPrefix("IDENT", ##class(FHIR.FHIRPath.Parselet.IdentParselet).%New())
 	Do parser.RegisterPrefix("LPAREN", ##class(FHIR.FHIRPath.Parselet.GroupParselet).%New())
-	Do parser.RegisterPrefix("MINUS", ##class(FHIR.FHIRPath.Parselet.UnaryParselet).%New(130))
+	
 	Do parser.RegisterPrefix("STRING", ##class(FHIR.FHIRPath.Parselet.StringParselet).%New())
 	Do parser.RegisterPrefix("AS", ##class(FHIR.FHIRPath.Parselet.IdentParselet).%New())
 	Do parser.RegisterPrefix("IS", ##class(FHIR.FHIRPath.Parselet.IdentParselet).%New())
-
-	Do parser.RegisterInfix("GT", ##class(FHIR.FHIRPath.Parselet.BinaryOpParselet).%New(5))
-	Do parser.RegisterInfix("GTE", ##class(FHIR.FHIRPath.Parselet.BinaryOpParselet).%New(5))
-	Do parser.RegisterInfix("LT", ##class(FHIR.FHIRPath.Parselet.BinaryOpParselet).%New(5))
-	Do parser.RegisterInfix("LTE", ##class(FHIR.FHIRPath.Parselet.BinaryOpParselet).%New(5))
-	Do parser.RegisterInfix("PLUS", ##class(FHIR.FHIRPath.Parselet.BinaryOpParselet).%New(10))
-	Do parser.RegisterInfix("MINUS", ##class(FHIR.FHIRPath.Parselet.BinaryOpParselet).%New(10))
-	Do parser.RegisterInfix("STAR", ##class(FHIR.FHIRPath.Parselet.BinaryOpParselet).%New(20))
-	Do parser.RegisterInfix("SLASH", ##class(FHIR.FHIRPath.Parselet.BinaryOpParselet).%New(20))
-	Do parser.RegisterInfix("DOT", ##class(FHIR.FHIRPath.Parselet.BinaryOpParselet).%New(100))
-	Do parser.RegisterInfix("LPAREN", ##class(FHIR.FHIRPath.Parselet.CallParselet).%New(110))
-	Do parser.RegisterInfix("EQUALS", ##class(FHIR.FHIRPath.Parselet.BinaryOpParselet).%New(112))
-	Do parser.RegisterInfix("NOT_EQUALS", ##class(FHIR.FHIRPath.Parselet.BinaryOpParselet).%New(112))
-	Do parser.RegisterInfix("LOGIC_AND", ##class(FHIR.FHIRPath.Parselet.BinaryOpParselet).%New(108))
-	Do parser.RegisterInfix("LOGIC_OR", ##class(FHIR.FHIRPath.Parselet.BinaryOpParselet).%New(107))
-	Do parser.RegisterInfix("LOGIC_XOR", ##class(FHIR.FHIRPath.Parselet.BinaryOpParselet).%New(107))
-	Do parser.RegisterInfix("CONCAT", ##class(FHIR.FHIRPath.Parselet.BinaryOpParselet).%New(107))
-	Do parser.RegisterInfix("UNION", ##class(FHIR.FHIRPath.Parselet.BinaryOpParselet).%New(107))
-	Do parser.RegisterInfix("LSQRBRACKET", ##class(FHIR.FHIRPath.Parselet.IndexParselet).%New(120))
-	Do parser.RegisterInfix("AS", ##class(FHIR.FHIRPath.Parselet.BinaryOpParselet).%New(103))
-	Do parser.RegisterInfix("IS", ##class(FHIR.FHIRPath.Parselet.BinaryOpParselet).%New(95))
+	
 
 	Return parser.ParseExpression(0)
 }

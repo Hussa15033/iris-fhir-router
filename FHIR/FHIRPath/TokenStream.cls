@@ -1,4 +1,4 @@
-///
+/// 
 /// Encapsulates a stream of tokens and converts them from the native FHIRPath
 /// parser into the custom parser created. All operators have been mapped as
 /// needed
@@ -37,14 +37,20 @@ Method %OnNew(pInput As %String) As %Status
 			")":"RPAREN",
 			"+":"PLUS",
 			"-":"MINUS",
-			"*":"STAR",
-			"/":"SLASH",
+			"*":"MULTIPLY",
+			"/":"DIVISION",
+			"div":"DIV",
+			"mod":"MOD",
 			"as":"AS",
 			"is":"IS",
 			"]":"RSQRBRACKET",
 			"&":"CONCAT",
 			"!=":"NOT_EQUALS",
+			"~":"EQUIV",
+			"!~":"NOT_EQUIV",
 			"|":"UNION",
+			"in":"IN",
+			"contains":"CONTAINS",
 			"EOT":"EOF",
 			:"")
 			Throw:opType="" ##class(%Exception.General).%New("No matching token for operator","-303282",,"Cannot handle operator '" _token.opName_"'")
