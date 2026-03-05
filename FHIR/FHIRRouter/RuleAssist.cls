@@ -32,15 +32,21 @@ ClassMethod GetQueryData(ByRef pArray, pParam) As %String
 	Set tVal=""
 	Try {
 		If pParam="FHIRVersion" {
-			Set tRS = ##class(%SQL.Statement).%ExecDirectNoPrivNoAudit(,"SELECT DISTINCT coreVersion FROM HS_FHIRMeta_Storage.Rsrc")
+			
+			Set tRS = ##class(%SQL.Statement).%ExecDirectNoPrivNoAudit(,"SELECT id FROM HS_FHIRMeta_Storage.Package")
 			While tRS.%Next() {
-				Set tVal = tVal _ "," _ tRS.%Get("coreVersion")
+				Set tVal = tVal _ "," _ tRS.%Get("id")
 			}
 		} ElseIf pParam="resourceFilter" {
+			/// Select the core version this package depends on
 			Set tResourceVersion = $G(pArray("FHIRVersion"))
-			Quit:tResourceVersion=""
+			Quit:tResourceVersion="Nope"
 
-			Set tRS = ##class(%SQL.Statement).%ExecDirectNoPrivNoAudit(,"SELECT id FROM HS_FHIRMeta_Storage.Rsrc WHERE kind='resource' AND coreVersion=? AND type=id", tResourceVersion)
+			Set tRS = ##class(%SQL.Statement).%ExecDirectNoPrivNoAudit(,"SELECT coreVersion FROM HS_FHIRMeta_Storage.Package WHERE id=?", tResourceVersion)
+			Do tRS.%Next()
+			Set coreVersion = tRS.%Get("coreVersion")
+
+			Set tRS = ##class(%SQL.Statement).%ExecDirectNoPrivNoAudit(,"SELECT id FROM HS_FHIRMeta_Storage.Rsrc WHERE kind='resource' AND coreVersion=? AND type=id", coreVersion)
 			While (tRS.%Next()) {
 				Set tVal = tVal _ "," _ tRS.%Get("id")
 			}
@@ -98,7 +104,12 @@ ClassMethod RuntimeConstraintCheck(ByRef pArray, pContext, Output pPassed = 0) A
 		Quit $$$OK
 	}
 
-	If (pContext.FHIRJSON.%Get("resourceType") = "") || ($ZCVT(pContext.FHIRJSON.resourceType, "U") '= $ZCVT(pArray("resourceFilter"), "U")) {
+	If (pContext.FHIRJSON.%Get("resourceType") = "") {
+		Set pArray("constraintErrorMsg") = "Resource type not found in FHIR data"
+		Quit $$$OK
+	}
+
+	If (pArray("resourceFilter") '= "") && ($ZCVT(pContext.FHIRJSON.resourceType, "U") '= $ZCVT(pArray("resourceFilter"), "U")) {
 		Set pArray("constraintErrorMsg") = "Resource is not of type '" _ pArray("resourceFilter") _ "'"
 		Quit $$$OK
 	}
