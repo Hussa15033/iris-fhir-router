@@ -1,4 +1,4 @@
-///
+/// 
 /// The RuleAssist class provides metadata to the rules editor over http
 /// Modify RuntimeConstraintsCheck() to add additional checks at runtime
 /// 
@@ -32,22 +32,18 @@ ClassMethod GetQueryData(ByRef pArray, pParam) As %String
 	Set tVal=""
 	Try {
 		If pParam="FHIRVersion" {
-			Set tRS = ##class(%SQL.Statement).%ExecDirect(,"SELECT DISTINCT coreVersion FROM HS_FHIRMeta_Storage.Rsrc")
+			Set tRS = ##class(%SQL.Statement).%ExecDirectNoPrivNoAudit(,"SELECT DISTINCT coreVersion FROM HS_FHIRMeta_Storage.Rsrc")
 			While tRS.%Next() {
 				Set tVal = tVal _ "," _ tRS.%Get("coreVersion")
 			}
-			Set:tVal="" tVal = ",4.0.1"
 		} ElseIf pParam="resourceFilter" {
 			Set tResourceVersion = $G(pArray("FHIRVersion"))
 			Quit:tResourceVersion=""
 
-			Set tRS = ##class(%SQL.Statement).%ExecDirect(,"SELECT id FROM HS_FHIRMeta_Storage.Rsrc WHERE kind='resource' AND coreVersion=? AND type=id", tResourceVersion)
+			Set tRS = ##class(%SQL.Statement).%ExecDirectNoPrivNoAudit(,"SELECT id FROM HS_FHIRMeta_Storage.Rsrc WHERE kind='resource' AND coreVersion=? AND type=id", tResourceVersion)
 			While (tRS.%Next()) {
 				Set tVal = tVal _ "," _ tRS.%Get("id")
 			}
-
-			Set:tVal="" tVal = $CASE(tResourceVersion, "4.0.1":",Account,ActivityDefinition,AdverseEvent,AllergyIntolerance,Appointment,AppointmentResponse,AuditEvent,Basic,Binary,BiologicallyDerivedProduct,BodyStructure,Bundle,CapabilityStatement,CarePlan,CareTeam,CatalogEntry,ChargeItem,ChargeItemDefinition,Claim,ClaimResponse,ClinicalImpression,CodeSystem,Communication,CommunicationRequest,CompartmentDefinition,Composition,ConceptMap,Condition,Consent,Contract,Coverage,CoverageEligibilityRequest,CoverageEligibilityResponse,DetectedIssue,Device,DeviceDefinition,DeviceMetric,DeviceRequest,DeviceUseStatement,DiagnosticReport,DocumentManifest,DocumentReference,DomainResource,EffectEvidenceSynthesis,Encounter,Endpoint,EnrollmentRequest,EnrollmentResponse,EpisodeOfCare,EventDefinition,Evidence,EvidenceVariable,ExampleScenario,ExplanationOfBenefit,FamilyMemberHistory,Flag,Goal,GraphDefinition,Group,GuidanceResponse,HealthcareService,ImagingStudy,Immunization,ImmunizationEvaluation,ImmunizationRecommendation,ImplementationGuide,InsurancePlan,Invoice,Library,Linkage,List,Location,Measure,MeasureReport,Media,Medication,MedicationAdministration,MedicationDispense,MedicationKnowledge,MedicationRequest,MedicationStatement,MedicinalProduct,MedicinalProductAuthorization,MedicinalProductContraindication,MedicinalProductIndication,MedicinalProductIngredient,MedicinalProductInteraction,MedicinalProductManufactured,MedicinalProductPackaged,MedicinalProductPharmaceutical,MedicinalProductUndesirableEffect,MessageDefinition,MessageHeader,MolecularSequence,NamingSystem,NutritionOrder,Observation,ObservationDefinition,OperationDefinition,OperationOutcome,Organization,OrganizationAffiliation,Parameters,Patient,PaymentNotice,PaymentReconciliation,Person,PlanDefinition,Practitioner,PractitionerRole,Procedure,Provenance,Questionnaire,QuestionnaireResponse,RelatedPerson,RequestGroup,ResearchDefinition,ResearchElementDefinition,ResearchStudy,ResearchSubject,Resource,RiskAssessment,RiskEvidenceSynthesis,Schedule,SearchParameter,ServiceRequest,Slot,Specimen,SpecimenDefinition,StructureDefinition,StructureMap,Subscription,Substance,SubstanceNucleicAcid,SubstancePolymer,SubstanceProtein,SubstanceReferenceInformation,SubstanceSourceMaterial,SubstanceSpecification,SupplyDelivery,SupplyRequest,Task,TerminologyCapabilities,TestReport,TestScript,ValueSet,VerificationResult,VisionPrescription",
-			:"")
 		}
 	} Catch {
 	}
@@ -129,6 +125,20 @@ ClassMethod GenerateDeleteSchema() As %DynamicObject
 
 ClassMethod GenerateSendSchema()
 {
+	return {
+		"type":"object",
+		"properties": {
+			"target": {
+				"type":"string"
+			},
+			"FHIRPath": {
+				"type":"string"
+			},
+			"type": {
+				"const":"send"
+			}
+		}
+	}
 	return ##class(EnsLib.MsgRouter.RuleAssist).GenerateSendSchema()
 }
 
