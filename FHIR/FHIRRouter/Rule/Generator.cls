@@ -107,7 +107,7 @@ ClassMethod generateFHIRPathEval(pExpression As %String, Output pValue As %Strin
 	/// Next we use the custom parser to ensure the FHIRPath is semantically correct too
 	/// TODO: Use the custom parser and return an error status here if the FHIRPath syntax is not valid
 
-	do ..line("set fAPI = ##class(HS.FHIRPath.API).getInstance($lb(tConstraints(""FHIRVersion"")))", pLevel)
+	do ..line("set fAPI = ##class(HS.FHIRPath.API).getInstance($lb(tConstraints(""FHIRPackage"")))", pLevel)
 	do ..line("set fExpr = """ _ $REPLACE(pExpression, """", "'") _ """")
 	#; do ..line("$$$TRACE(""Evaluating expression""_fExpr)")
 	do ..line("set fTree = fAPI.parse(fExpr)", pLevel)

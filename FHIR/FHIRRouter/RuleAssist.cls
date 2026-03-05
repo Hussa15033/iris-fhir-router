@@ -9,7 +9,7 @@ Class FHIR.FHIRRouter.RuleAssist Extends EnsLib.MsgRouter.RuleAssist
 
 ClassMethod GetMetaData() As %String
 {
-	Quit "source:Source:#configname,FHIRVersion:FHIR Version:#query,resourceFilter:Resource Filter:#query"
+	Quit "source:Source:#configname,FHIRPackage:FHIR Package:#query,resourceFilter:Resource Filter:#query"
 }
 
 ClassMethod GetDescription() As %String
@@ -31,7 +31,7 @@ ClassMethod GetQueryData(ByRef pArray, pParam) As %String
 {
 	Set tVal=""
 	Try {
-		If pParam="FHIRVersion" {
+		If pParam="FHIRPackage" {
 			
 			Set tRS = ##class(%SQL.Statement).%ExecDirectNoPrivNoAudit(,"SELECT id FROM HS_FHIRMeta_Storage.Package")
 			While tRS.%Next() {
@@ -39,7 +39,7 @@ ClassMethod GetQueryData(ByRef pArray, pParam) As %String
 			}
 		} ElseIf pParam="resourceFilter" {
 			/// Select the core version this package depends on
-			Set tResourceVersion = $G(pArray("FHIRVersion"))
+			Set tResourceVersion = $G(pArray("FHIRPackage"))
 			Quit:tResourceVersion="Nope"
 
 			Set tRS = ##class(%SQL.Statement).%ExecDirectNoPrivNoAudit(,"SELECT coreVersion FROM HS_FHIRMeta_Storage.Package WHERE id=?", tResourceVersion)
