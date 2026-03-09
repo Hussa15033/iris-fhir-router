@@ -59,7 +59,7 @@ ClassMethod GetQueryData(ByRef pArray, pParam) As %String
 ClassMethod GetPropertyList(ByRef pArray, pText) As %String
 {
 	#; Return "," _ pArray("segName") _ ",test"
-	Set autocomplete = ##class(FHIR.FHIRPath.Autocomplete).%New(pArray("resourceFilter"))
+	Set autocomplete = ##class(FHIR.FHIRPath.Autocomplete).%New($G(pArray("resourceFilter")))
 	Set pSearch = pText
 	Set:pSearch="" pSearch = pArray("segName")
 	Set pathList = autocomplete.Suggest(pSearch)
@@ -109,8 +109,9 @@ ClassMethod RuntimeConstraintCheck(ByRef pArray, pContext, Output pPassed = 0) A
 		Quit $$$OK
 	}
 
-	If (pArray("resourceFilter") '= "") && ($ZCVT(pContext.FHIRJSON.resourceType, "U") '= $ZCVT(pArray("resourceFilter"), "U")) {
-		Set pArray("constraintErrorMsg") = "Resource is not of type '" _ pArray("resourceFilter") _ "'"
+	Set resourceFilter = $G(pArray("resourceFilter"))
+	If (resourceFilter '= "") && ($ZCVT(pContext.FHIRJSON.resourceType, "U") '= $ZCVT(resourceFilter, "U")) {
+		Set pArray("constraintErrorMsg") = "Resource is not of type '" _ resourceFilter _ "'"
 		Quit $$$OK
 	}
 	
