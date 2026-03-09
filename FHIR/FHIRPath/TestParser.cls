@@ -8,7 +8,7 @@
 /// 
 /// To debug and run a specific test case, use:
 /// 	##class(FHIR.FHIRPath.TestParser).Run(1, <test-case-number>)
-///
+/// 
 /// @author Auwais Hussain (ahussain@intersystems.com)
 /// 
 Class FHIR.FHIRPath.TestParser Extends %RegisteredObject
@@ -86,6 +86,8 @@ ClassMethod Test(pDebug = 0, pTestNumber = "")
 	Do ..RunOneTest(75, "Patient.contact.telecom.where(use = 'official').ex", "exists()")
 	Do ..RunOneTest(76, "Patient.contact.telecom.where(use = 'official').ex", "!not()")
 	Do ..RunOneTest(77, "Patient.contact.telecom.where(use = 'official').exists().", "not()")
+	Do ..RunOneTest(78, "Practitioner.name.family.union(", "id")
+	Do ..RunOneTest(79, "Patient.name | Bundle.", "!active.")
 	Do ..RunOneTest(1, "Patient.", "name.")
 	Do ..RunOneTest(2, "Patient.", "telecom.")
 	Do ..RunOneTest(3, "Patient.na", "name.")
@@ -130,7 +132,6 @@ ClassMethod Test(pDebug = 0, pTestNumber = "")
 	Do ..RunOneTest(42, "Practitioner.name.family.unio", "union(")
 	Do ..RunOneTest(43, "Practitioner.name.family.union(P", "Practitioner")
 	Do ..RunOneTest(44, "Practitioner.name.family.union(Practitioner.", "id")
-	Do ..RunOneTest(78, "Practitioner.name.family.union(", "id")
 	Do ..RunOneTest(45, "Bundle.entry.resource.ofType(P", "Patient")
 	Do ..RunOneTest(46, "Patient.telecom.wher", "where(")
 	Do ..RunOneTest(47, "Patient.telecom.where(", "use")
