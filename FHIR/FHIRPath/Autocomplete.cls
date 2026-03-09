@@ -1,9 +1,8 @@
-///
+/// 
 /// This class is an autocomplete function for FHIRPath.
 /// 
 /// Auwais Hussain (ahussain@intersystems.com)
 /// 
-
 Class FHIR.FHIRPath.Autocomplete Extends %RegisteredObject
 {
 
@@ -21,6 +20,12 @@ Method %OnNew(pValidResource = "") As %Status
 	Quit $$$OK
 }
 
+/// Helper method to convert an operator to it's corresponding function (if applicable)
+Method OpAsFn(pOp As %String)
+{
+	Return $CASE(pOp, "|":"union", :"")
+}
+
 Method InorderTraversal(pExpr As FHIR.FHIRPath.Expr.Expression, ByRef pCtx As FHIR.FHIRPath.FHIRContextHelper, ByRef finalTokenPrefix, ByRef refWithinFunctionCall = 0, withinFunctionCall = 0)
 {
 	/// Reach a leaf node
@@ -30,8 +35,21 @@ Method InorderTraversal(pExpr As FHIR.FHIRPath.Expr.Expression, ByRef pCtx As FH
 
 	Set cls = $CLASSNAME(pExpr)
 	If cls = "FHIR.FHIRPath.Expr.BinaryExpr" {
+		Set savedContext = pCtx.Context
+		/// Traverse down the left tree
 		Do ..InorderTraversal(pExpr.Left, pCtx, .finalTokenPrefix, .refWithinFunctionCall, withinFunctionCall)
+		
+		Set opFn = ..OpAsFn(pExpr.Op)
+		Do:opFn'="" pCtx.AdvanceFunction(opFn)
+		If pExpr.Op = "|" {
+			/// If this is the union operator, we want to merge the context resulting from the RHS
+			/// Instantiate a new Context obj
+			Set leftCtx = ##class(FHIR.FHIRPath.FHIRContextHelper).%New(savedContext)
+			Do ..InorderTraversal(pExpr.Right, leftCtx, .finalTokenPrefix, .refWithinFunctionCall, withinFunctionCall)
 
+			Do pCtx.MergeContext(leftCtx.Context)
+		}
+		
 		/// If we successfully advance the operator, it means the operator doubles as both
 		/// a function and operator, so we move within
 		Set opSuccess = pCtx.AdvanceOperator(pExpr.Op)
@@ -81,13 +99,13 @@ Method Suggest(pExpression As %String) As %ListOfDataTypes
 	If ..ResourceFilter '= "" {
 		/// Specific resource filter
 		Set ..Resource = ..ResourceFilter
-		Set tRS = ##class(%SQL.Statement).%ExecDirect(,"SELECT * FROM HS_FHIRMeta_Storage.Rsrc WHERE coreVersion=? AND id=type AND kind='resource' AND %UPPER(id) = ?", "4.0.1", $ZCVT(..ResourceFilter, "U"))
+		Set tRS = ##class(%SQL.Statement).%ExecDirect(,"SELECT * FROM HS_FHIRMeta_Storage.Rsrc WHERE coreVersion=? AND id=type AND kind='resource' AND %UPPER(id) = ?", ..FHIRVersion, $ZCVT(..ResourceFilter, "U"))
 		Throw:tRS.%Next()=0 ##class(%Exception.General).%New("Resource not found","-30211",,"The resource '" _ ..ResourceFilter _ "' could not be found")
 		Set searchString = pExpression
 	} Else {
 		Set ..Resource = $PIECE(pExpression, ".")
 		/// Check if this resource is valid
-		Set tRS = ##class(%SQL.Statement).%ExecDirect(,"SELECT * FROM HS_FHIRMeta_Storage.Rsrc WHERE coreVersion=? AND id=type AND kind='resource' AND %UPPER(id) LIKE ?", "4.0.1", $ZCVT(..Resource, "U") _ "%")
+		Set tRS = ##class(%SQL.Statement).%ExecDirect(,"SELECT * FROM HS_FHIRMeta_Storage.Rsrc WHERE coreVersion=? AND id=type AND kind='resource' AND %UPPER(id) LIKE ?", ..FHIRVersion, $ZCVT(..Resource, "U") _ "%")
 
 		While tRS.%Next() '= 0 {
 			If (..Resource = tRS.%Get("id")) {

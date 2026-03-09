@@ -1,4 +1,4 @@
-///
+/// 
 /// A helper function which keeps the context of a FHIRPath expression as we traverse through
 /// its AST. It uses the internal FHIR classes to perform lookups on StructureDefinition resources
 /// 
@@ -31,15 +31,50 @@ Property IsCollection As %Boolean;
 
 Property WithinFunction As %String;
 
+/// All fields/paths within this context and their snapshots
+Property Definitions As %ArrayOfObjects;
+
+/// A list of data structures available within this context.
+/// This is the heart of this class, can be used to instantly
+/// load a context or merge/save contexts
+Property Context As list Of %String;
+
 /// Name of resource or primitive data type
 Property SingletonDataType As %String(VALUELIST = ",string,boolean");
 
 Property Status As %Status;
 
-Method %OnNew() As %Status
+Method %OnNew(pInitialContext = "") As %Status
 {
+	Set ..Context = ##class(%ListOfDataTypes).%New()
+	Do ..ValidateList(pInitialContext)
+	Do ..MergeContext(pInitialContext)
+
+	Do ..LoadContext()
+
 	Set ..Status = $$$OK
 	Quit $$$OK
+}
+
+Method ValidateList(pList) [ Internal ]
+{
+	If (pList '= "") {
+		Throw:'$LISTVALID(pList) ##class(%Exception.General).%New("Not a list")
+	}
+
+	Return $lb()
+}
+
+/// Merges the context of one context list into this context
+Method MergeContext(pContext)
+{
+	For i=1:1:$ll(pContext) {
+		Set v = $LG(pContext, i)
+		Set found = ..Context.Find(v)
+		If found = "" {
+			Do ..Context.Insert(v)
+		}
+	}
 }
 
 ClassMethod BuildResourceContext(pResource As %String) As FHIR.FHIRPath.FHIRContextHelper
@@ -68,22 +103,33 @@ Method AddFieldType(pName, pType)
 	Do ..Fields.SetAt(newType, pName)
 }
 
-Method LoadContext(pStructureDefinition As %DynamicObject)
+/// InitialDefinitions are the field definitions we want to keep in the original context
+Method LoadContext(InitialDefinitions = "")
+{
+	Quit:..Context.Size=0
+
+	Do ..Definitions.Clear()
+	Set ..Definitions = InitialDefinitions
+	For i=1:1:..Context.Size {
+		Set code = ..Context.GetAt(i)
+		Set els = $LISTFROMSTRING(code, "|")
+		Set tRS = ##class(%SQL.Statement).%ExecDirect(,"SELECT * FROM HS_FHIRMeta_Storage.Rsrc WHERE url=? AND version=? AND resourceType='StructureDefinition'", $LG(els, 1), $LG(els, 2))
+		Throw:tRS.%Next()=0 ##class(%Exception.General).%New("StructureDefinition for '" _ code _ "' does not exist", "-20322",,"")
+		Set sd = {}.%FromJSON(tRS.%Get("json"))
+
+		Do ..LoadDefinition(sd)
+	}
+}
+
+Method LoadDefinition(pStructureDefinition As %DynamicObject) [ Private ]
 {
 	#; Write "Loading new context...",!
-	/// Loads the context of a different structure into this helper
-	Set ..CurrentContext = pStructureDefinition
 	
 	/// This method traverses the StructureDefinition of an item
 	/// and builds its context
 	#dim elements As %DynamicArray
 	Set elements = pStructureDefinition.snapshot.element
 	Set iter = elements.iterator()
-	/// Reset fields context
-	Do ..Fields.Clear()
-	Do ..CollectionFields.Clear()
-	Do ..AvailableFields.Clear()
-
 	
 	//Set ..SingletonDataType = ""
 
@@ -92,6 +138,8 @@ Method LoadContext(pStructureDefinition As %DynamicObject)
 
 		Set path = $LISTFROMSTRING(value.path,".")
 		Set props = $LIST(path, 2, *)
+		
+		/// Patient.contact.id => contact.id
 		Set propName = $LISTTOSTRING(props, ".")
 
 		Set types = value.type
@@ -101,19 +149,18 @@ Method LoadContext(pStructureDefinition As %DynamicObject)
 			Set code = type.code
 			Set fieldName = propName
 
-			If (propName [ "[x]") {
-				/// The value replacing [x] is camel case of the type of the property
-				Set upperCaseType = $ZCVT($EXTRACT(code, 1, 1), "U") _ $EXTRACT(code, 2, *)
-				Set fieldName = $REPLACE(propName, "[x]", upperCaseType)
+			/// TODO: ADD SUPPORT FOR [X] ELEMENTS
+			#; If (propName [ "[x]") {
+			#; 	/// The value replacing [x] is camel case of the type of the property
+			#; 	Set upperCaseType = $ZCVT($EXTRACT(code, 1, 1), "U") _ $EXTRACT(code, 2, *)
+			#; 	Set fieldName = $REPLACE(propName, "[x]", upperCaseType)
 
-				/// We also want to add this data type to the original field definition
-				Do ..AddFieldType($REPLACE(propName, "[x]", ""), code)
-			}
-			Do ..AddFieldType(fieldName, code)
-		}
+			#; 	/// We also want to add this data type to the original field definition
+			#; 	Do ..AddFieldType($REPLACE(propName, "[x]", ""), code)
+			#; }
 
-		If (value.max = "*") || (value.max > 1) {
-			Do ..CollectionFields.Insert(propName)
+			Write "Setting definition " _ fieldName _ "..",!
+			Do ..Definitions.SetAt(value, fieldName)
 		}
 	}
 }
@@ -239,22 +286,36 @@ Method AdvanceContext(pNextField As %String, pIsFunction As %Boolean = 0) As %Bo
 		Quit $$$ISOK(tSC)
 	}
 
-	Set validNextTypes = $LISTFROMSTRING(..Fields.GetAt(pNextField), ",")
+	Set definition = ..Definitions.GetAt(pNextField)
 
-	#; W pNextField,!,"Types: "_..Fields.GetAt(pNextField),!,!
-	Set fieldDefined = ..Fields.IsDefined(pNextField)
-	If (fieldDefined = 0) {
-		#; Set tSC = $$$ERROR($$$GeneralError, "Field '" _ pNextField _ "' is not valid within this context")
+	If (definition = "") {
+		/// Definition not found (yet..)
+		Set tSC = $$$ERROR($$$GeneralError, "Field '" _ pNextField _ "' is not valid within this context")
+		$$$ThrowOnError(tSC)
 		Quit 0
 	}
 
-	Set ..IsCollection = 0
-	If (..CollectionFields.Find(pNextField) '= "") {
-		Set ..IsCollection = 1
+	/// Loop through all definitions, as this may be part of a
+	/// sub element of a BackboneElement directly embedded in the resource
+	Set replaceDefinitions = ##class(%ArrayOfObjects).%New()
+	Set key = ""
+	While (..Definitions.GetNext(.key)) {
+		Set props2 = $LISTFROMSTRING(..Definitions.GetAt(key), ".")
+		If (pNextField = $LISTGET(props2, 1)) {
+			/// This field is hanging
+			Do replaceDefinitions.SetAt(..Definitions.GetAt(key), $LG(props2, 2))
+		}
 	}
 
-	If $LL(validNextTypes)=1 {
-		Set nextType = $LG(validNextTypes, 1)
+	If replaceDefinitions.Count() > 0 {
+		/// Hanging fields found, replace parent definitions
+		Set ..Definitions = replaceDefinitions
+		Quit 1
+	}
+
+	If definition.type.%Size()=1 {
+		Set nextType = definition.type.%Get(0).code
+		Write "Next type found: " _ nextType
 		Set tRS = ##class(%SQL.Statement).%ExecDirect(,"SELECT * FROM HS_FHIRMeta_Storage.Rsrc WHERE coreVersion=? AND %UPPER(id)=? AND resourceType='StructureDefinition'", "4.0.1", $ZCVT(nextType, "U"))
 		Set validField = tRS.%Next()
 		Set tSC = $$$OK
@@ -262,6 +323,7 @@ Method AdvanceContext(pNextField As %String, pIsFunction As %Boolean = 0) As %Bo
 		$$$ThrowOnError(tSC)
 		Quit:validField=0 0
 	} Else {
+		Throw ##class(%Exception.General).%New("Multiple data types for code found...")
 		/// This field has multiple next types because it is a choice field
 		/// Only keep this field within the current context
 		Set nextTypes = ..Fields.GetAt(pNextField)
@@ -269,68 +331,51 @@ Method AdvanceContext(pNextField As %String, pIsFunction As %Boolean = 0) As %Bo
 		Do ..Fields.SetAt(nextTypes, pNextField)
 		Quit 1
 	}
-	
-	/// Loop through all fields to find any that are "hanging"
-	/// Hanging fields are those specified in the path of a StructureDefinition
-	/// but are subproperties of another field
-	/// e.g. within a Patient resource we have:
-	/// Patient.contact
-	/// Patient.contact.address
-	/// Patient.contact.gender
-	/// The .address and .gender are considered "hanging"
-	/// We want to keep all hanging fields if we are traversing through that particular field
-	/// within the context
-	Set hangingFields = ##class(%ArrayOfDataTypes).%New()
-	Set collectionHangingFields = ##class(%ListOfDataTypes).%New()
-	Set nKey = ..Fields.Next("")
-	While nKey '= "" {
-		Set part = $LISTFROMSTRING(nKey, ".")
-		If ($LG(part, 1) = pNextField) {
-			If ($LL(part) > 2) {
-				#; w nKey,!
-				#; Throw ##class(%Exception.General).%New("More than 1 hanging field found","-30344",,)
-				/// Ignore this case, e.g. entry.request.extension within a 'Bundle'
-			} ElseIf ($LL(part) = 2) {
-				/// The 2nd element is hanging
-				#; Write "Set hanging field " _ ..Fields.GetAt(nKey)
-				Do hangingFields.SetAt(..Fields.GetAt(nKey), $LG(part, 2))
 
-				If (..CollectionFields.Find(nKey, "") '= "") {
-					Do collectionHangingFields.Insert($LG(part, 2))
-				}
-			}
+
+	Do ..Context.Clear()
+	Do ..Context.Insert(tRS.%Get("url") _ "|" _ tRS.%Get("version"))
+
+	/// Now find any "hanging fields" before loading the new context
+	Set newDefinitions = ##class(%ArrayOfObjects).%New()
+	While ..Definitions.GetNext(.key) {
+		Set split = $LISTFROMSTRING(key, ".")
+		Write "Key = " _ key _ ","_ $LG(split, 1),!
+		If ($LG(split, 1) = pNextField) && ($LL(split) = 2) {
+			W "FOUND"
+			Do newDefinitions.SetAt(..Definitions.GetAt(key), $LG(split, 2))
 		}
-
-		Set nKey = ..Fields.Next(nKey)
 	}
+	
+	Do ..LoadContext(newDefinitions)
 
-	Set sd = {}.%FromJSON(tRS.%Get("json"))
-	Do ..LoadContext(sd)
-
-	/// Copy all hanging fields into the current context
-	Set cKey = hangingFields.Next("")
-	While cKey '= "" {
-		Do ..AddFieldType(cKey, hangingFields.GetAt(cKey))
-		Do:collectionHangingFields.Find(cKey,"")'="" ..CollectionFields.Insert(cKey)
-		Set cKey = hangingFields.Next(cKey)
-	}
 	Return 1
+}
+
+ClassMethod Test()
+{
+	Set ctx = ##class(FHIR.FHIRPath.FHIRContextHelper).%New($LB("http://hl7.org/fhir/StructureDefinition/Patient|4.0.1"))
+	Do ctx.AdvanceContext("contact")
+	Do ctx.AdvanceContext("telecom")
+
+	zw ctx.GetPropertyList()
+
+	Return $$$OK
 }
 
 Method GetPropertyList() As %ListOfDataTypes
 {
+	W "Definition size..",!
+	W ..Definitions.Count()
+	w !
 	Set props = ##class(%ListOfDataTypes).%New()
-	Set k = ..Fields.Next("")
+	Set k = ..Definitions.Next("")
 	While k '= "" {
-		Do props.Insert(k)
+		W k,!
+		Set broken = $LISTFROMSTRING(k, ".")
+		Do props.Insert($LG(broken, 1))
 		#; Write "Looping through properties..." _ k,!
-		Set k = ..Fields.Next(k)
-	}
-
-	Set k = ..AvailableFields.Next("")
-	While k '= "" {
-		Do props.Insert(..AvailableFields.GetAt(k))
-		Set k = ..AvailableFields.Next(k)
+		Set k = ..Definitions.Next(k)
 	}
 
 	Return props
