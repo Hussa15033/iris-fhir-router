@@ -31,45 +31,82 @@ Property IsCollection As %Boolean;
 
 Property WithinFunction As %String;
 
+Property Loader As HS.FHIRMeta.Load.NpmLoader;
+
+/// List of packages to support....
+Property PackageList As list Of %String;
+
+/// Snapshot of the current element
+Property Snapshot As %DynamicObject;
+
 /// All fields/paths within this context and their snapshots
 Property Definitions As %ArrayOfObjects;
 
 /// A list of data structures available within this context.
 /// This is the heart of this class, can be used to instantly
 /// load a context or merge/save contexts
-Property Context As list Of %String;
+Property Context As %ListOfDataTypes;
+
+/// Any additional custom suggestions based on the scope,
+/// e.g. when within functions like `aggregate()`
+Property ScopedVariables As list Of %String;
 
 /// Name of resource or primitive data type
 Property SingletonDataType As %String(VALUELIST = ",string,boolean");
 
-Property Status As %Status;
+Property Function As %String;
 
-Method %OnNew(pInitialContext = "") As %Status
+Method %OnNew(pLoader As HS.FHIRMeta.Load.NpmLoader, pResource As %String, pInitialContext = "") As %Status
 {
-	Set ..Context = ##class(%ListOfDataTypes).%New()
-	Do ..ValidateList(pInitialContext)
-	Do ..MergeContext(pInitialContext)
+	Set ..Loader = pLoader
+	Do ..ResetContext(pInitialContext)
 
-	Do ..LoadContext()
-
-	Set ..Status = $$$OK
 	Quit $$$OK
 }
 
-Method ValidateList(pList) [ Internal ]
+/// Create a copy context
+Method Duplicate()
 {
-	If (pList '= "") {
-		Throw:'$LISTVALID(pList) ##class(%Exception.General).%New("Not a list")
+	Set ctx = ##class(FHIRContextHelper).%New(..Loader, ..Context)
+	Return ctx
+}
+
+Method ResetContext(pContext = "")
+{
+	Quit:pContext=""
+
+	Set ..Context = ##class(%ListOfDataTypes).%New()
+	Do ..MergeContext(pContext)
+
+	Do ..LoadContext()
+}
+
+/// Converts an $lb() into a %ListOfDataTypes if required
+Method ValidateList(pList = "") As %ListOfDataTypes [ Internal ]
+{
+	Quit:pList="" ""
+	If (pList '= "") && $LISTVALID(pList) {
+		Set newList = ##class(%ListOfDataTypes).%New()
+		For i=1:1:$LL(pList) {
+			Do newList.Insert($LG(pList, i))
+		}
+
+		Set pList = newList
 	}
 
-	Return $lb()
+	If '$ISOBJECT(pList) || '$METHOD(pList, "%Extends", "%ListOfDataTypes") {
+		Throw ##class(%Exception.General).%New("Not a list",,,pList)
+	}
+
+	Return pList
 }
 
 /// Merges the context of one context list into this context
 Method MergeContext(pContext)
 {
-	For i=1:1:$ll(pContext) {
-		Set v = $LG(pContext, i)
+	Set pList = ..ValidateList(pContext)
+	For i=1:1:pList.Size {
+		Set v = pList.GetAt(i)
 		Set found = ..Context.Find(v)
 		If found = "" {
 			Do ..Context.Insert(v)
@@ -83,10 +120,7 @@ ClassMethod BuildResourceContext(pResource As %String) As FHIR.FHIRPath.FHIRCont
 	Throw:tRS.%Next()=0 ##class(%Exception.General).%New("Resource '" _ pResource _ "' does not exist", "-20322",,"")
 	Set sd = {}.%FromJSON(tRS.%Get("json"))
 
-	Set ctx = ##class(FHIR.FHIRPath.FHIRContextHelper).%New()
-	Set ctx.ResourceContext = sd
-
-	Do ctx.LoadContext(sd)
+	Set ctx = ##class(FHIR.FHIRPath.FHIRContextHelper).%New($lb("http://hl7.org/fhir/StructureDefinition/" _ pResource _ "|4.0.1"))
 
 	Return ctx
 }
@@ -104,7 +138,7 @@ Method AddFieldType(pName, pType)
 }
 
 /// InitialDefinitions are the field definitions we want to keep in the original context
-Method LoadContext(InitialDefinitions = "")
+Method LoadContext(InitialDefinitions = "") [ Private ]
 {
 	Quit:..Context.Size=0
 
@@ -159,7 +193,7 @@ Method LoadDefinition(pStructureDefinition As %DynamicObject) [ Private ]
 			#; 	Do ..AddFieldType($REPLACE(propName, "[x]", ""), code)
 			#; }
 
-			Write "Setting definition " _ fieldName _ "..",!
+			#; Write "Setting definition " _ fieldName _ "..",!
 			Do ..Definitions.SetAt(value, fieldName)
 		}
 	}
@@ -190,11 +224,12 @@ Method TranslateFunctionToSuggestion(pFunctionName As %String) As %String
 	Quit pFunctionName _ "("
 }
 
-Method AdvanceFunction(pFunctionName As %String, pIsOp As %Boolean = 0) As %Boolean
+Method AdvanceFunction(pFunctionName As %String, pIsOp As %Boolean = 0) As %Boolean [ Private ]
 {
-
+	Set ..Function = pFunctionName
 	Set fnName = $ZCVT(pFunctionName, "L")
 	
+	#; Write "Advancing function..." _ pFunctionName,!
 	/// Function that return a primitive, not a collection
 	Set primitiveFunctions = $LISTFROMSTRING("exists,empty",",")
 	Set ..SingletonDataType = ""
@@ -240,7 +275,7 @@ Method AdvanceFunction(pFunctionName As %String, pIsOp As %Boolean = 0) As %Bool
 		Set ..IsCollection = 0
 		Set ..SingletonDataType = "boolean"
 	} ElseIf (fnName = "union") {
-		Do ..Reset()
+		#; Do ..Reset()
 
 		/// After resetting context, we add the current resource type to the list of available fields
 		Do ..Fields.SetAt(..ResourceContext.type, ..ResourceContext.type)
@@ -290,8 +325,8 @@ Method AdvanceContext(pNextField As %String, pIsFunction As %Boolean = 0) As %Bo
 
 	If (definition = "") {
 		/// Definition not found (yet..)
-		Set tSC = $$$ERROR($$$GeneralError, "Field '" _ pNextField _ "' is not valid within this context")
-		$$$ThrowOnError(tSC)
+		#; Set tSC = $$$ERROR($$$GeneralError, "Field '" _ pNextField _ "' is not valid within this context")
+		#; $$$ThrowOnError(tSC)
 		Quit 0
 	}
 
@@ -313,9 +348,13 @@ Method AdvanceContext(pNextField As %String, pIsFunction As %Boolean = 0) As %Bo
 		Quit 1
 	}
 
+
+	/// Definition exists and is of a particular type
+	Set ..Snapshot = definition
+
 	If definition.type.%Size()=1 {
 		Set nextType = definition.type.%Get(0).code
-		Write "Next type found: " _ nextType
+		#; Write "Next type found: " _ nextType
 		Set tRS = ##class(%SQL.Statement).%ExecDirect(,"SELECT * FROM HS_FHIRMeta_Storage.Rsrc WHERE coreVersion=? AND %UPPER(id)=? AND resourceType='StructureDefinition'", "4.0.1", $ZCVT(nextType, "U"))
 		Set validField = tRS.%Next()
 		Set tSC = $$$OK
@@ -337,16 +376,17 @@ Method AdvanceContext(pNextField As %String, pIsFunction As %Boolean = 0) As %Bo
 	Do ..Context.Insert(tRS.%Get("url") _ "|" _ tRS.%Get("version"))
 
 	/// Now find any "hanging fields" before loading the new context
+	/// This ensures any hanging fields are included when traversing
+	/// BackBoneElements.
 	Set newDefinitions = ##class(%ArrayOfObjects).%New()
 	While ..Definitions.GetNext(.key) {
 		Set split = $LISTFROMSTRING(key, ".")
-		Write "Key = " _ key _ ","_ $LG(split, 1),!
+		#; Write "Key = " _ key _ ","_ $LG(split, 1),!
 		If ($LG(split, 1) = pNextField) && ($LL(split) = 2) {
-			W "FOUND"
 			Do newDefinitions.SetAt(..Definitions.GetAt(key), $LG(split, 2))
 		}
 	}
-	
+
 	Do ..LoadContext(newDefinitions)
 
 	Return 1
@@ -354,28 +394,32 @@ Method AdvanceContext(pNextField As %String, pIsFunction As %Boolean = 0) As %Bo
 
 ClassMethod Test()
 {
-	Set ctx = ##class(FHIR.FHIRPath.FHIRContextHelper).%New($LB("http://hl7.org/fhir/StructureDefinition/Patient|4.0.1"))
-	Do ctx.AdvanceContext("contact")
-	Do ctx.AdvanceContext("telecom")
+	#; Set ctx = ##class(FHIR.FHIRPath.FHIRContextHelper).%New($LB("http://hl7.org/fhir/StructureDefinition/Patient|4.0.1"))
+	Set ac = ##class(FHIR.FHIRPath.Autocomplete).%New()
+	Set ctx = ..BuildResourceContext("Patient")
+	Set ast = ##class(FHIR.FHIRPath.Parser).ParseString("telecom.where(use=")
 
-	zw ctx.GetPropertyList()
+	Do ac.InorderTraversal(ast, .ctx, .ftp, .sg, .rwfc)
+
+	#; w ctx.Snapshot.%ToJSON()
+	#; zw ctx.GetPropertyList()
+	#; zw ctx.GetSuggestionsList()
+	#; zw ctx.GetFunctionsList()
 
 	Return $$$OK
 }
 
 Method GetPropertyList() As %ListOfDataTypes
 {
-	W "Definition size..",!
-	W ..Definitions.Count()
-	w !
 	Set props = ##class(%ListOfDataTypes).%New()
-	Set k = ..Definitions.Next("")
-	While k '= "" {
-		W k,!
+	While ..Definitions.GetNext(.k) {
 		Set broken = $LISTFROMSTRING(k, ".")
 		Do props.Insert($LG(broken, 1))
 		#; Write "Looping through properties..." _ k,!
-		Set k = ..Definitions.Next(k)
+	}
+
+	While ..ScopedVariables.Next(.k) {
+		Do props.Insert(..ScopedVariables.GetAt(k))
 	}
 
 	Return props
@@ -434,6 +478,57 @@ Method GetFunctionsList() As %ListOfDataTypes
 	}
 
 	Return fns
+}
+
+/// TODO: Implement and use this method
+/// Helper method to perform a lookup and return a %DynamicObject
+Method Lookup(pResourceType, pCanonicalURL, pVersion)
+{
+}
+
+Method GetSuggestionsList() As %ListOfDataTypes
+{
+	Set suggestions = ##class(%ListOfDataTypes).%New()
+	/// Look up details of the ValueSets according to the current snapshot
+	If '..Snapshot.%IsDefined("binding") {
+		Return suggestions
+	}
+
+	Set binding = ..Snapshot.%Get("binding")
+
+	If 'binding.%IsDefined("valueSet") {
+		Return suggestions
+	}
+
+	Set valueSet = binding.%Get("valueSet")
+
+	/// Rather than following the logic for the $expand operation,
+	/// use the built in expand operation
+	#; Set ..PackageList = $lb("hl7.fhir.r4.core@4.0.1")
+	Set meta = ##class(HS.FHIRMeta.Impl.MetaRsrcInfo).%New($lb("hl7.fhir.r4.core@4.0.1"))
+	
+	Do meta.ExpandValueSet(valueSet, .codes)
+	// codeSystemAndVersion can be:
+	// - CodeSystemUri|CodeSystemVersion, when the ValueSet specified a version.
+	// - CodeSystemUri only, when the ValueSet did not specify a version.
+	Set codeSystemAndVersion = ""
+	
+	For {
+		Set codeSystemAndVersion = $Order(codes(codeSystemAndVersion))
+		Quit:codeSystemAndVersion=""
+
+		Set codeSystemUri = $Piece(codeSystemAndVersion, "|", 1)
+		Set codeSystemVersion = $Piece(codeSystemAndVersion, "|", 2)
+		Set code = ""
+		For {
+			Set code = $Order(codes(codeSystemAndVersion, code), 1, display)
+			Quit:code=""
+			
+			Do suggestions.Insert(code)
+		}
+	}
+
+	Return suggestions
 }
 
 }
