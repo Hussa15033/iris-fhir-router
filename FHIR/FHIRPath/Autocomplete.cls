@@ -83,7 +83,7 @@ Method InorderTraversal(pExpr As FHIR.FHIRPath.Expr.Expression, ByRef pCtx As FH
 		Do ..InorderTraversal(pExpr.Field, .pCtx, .finalTokenPrefix, .suggestValues, .refWithinFunctionCall, withinFunctionCall)
 	} ElseIf (cls = "FHIR.FHIRPath.Expr.NumberExpr") || (cls = "FHIR.FHIRPath.Expr.DecimalExpr") {
 	} ElseIf (cls = "FHIR.FHIRPath.Expr.StringExpr") {
-		Do pCtx.AdvanceString()
+		#; Do pCtx.AdvanceString()
 	} ElseIf cls = "FHIR.FHIRPath.Expr.UnaryExpr" { 
 		Do ..InorderTraversal(pExpr.Expr, .pCtx, .finalTokenPrefix, .suggestValues, .refWithinFunctionCall, withinFunctionCall)
 	} Else {
@@ -158,7 +158,7 @@ Method Suggest(pExpression As %String) As %ListOfDataTypes
 	For i=1:1:propertyList.Size {
 		If ($EXTRACT(propertyList.GetAt(i), 1, $L(lastTokenFilter)) = lastTokenFilter) {
 			Do outputList.Insert(propertyList.GetAt(i) _ suffix)
-			Do:ctx.CollectionFields.Find(propertyList.GetAt(i))'="" outputList.Insert(propertyList.GetAt(i) _ "[")
+			Do:ctx.IsCollectionField(propertyList.GetAt(i)) outputList.Insert(propertyList.GetAt(i) _ "[")
 			Do:propertyList.GetAt(i)="extension" outputList.Insert("extension(")
 		}
 	}

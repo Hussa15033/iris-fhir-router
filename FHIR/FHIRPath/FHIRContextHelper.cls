@@ -17,19 +17,7 @@ Class FHIR.FHIRPath.FHIRContextHelper Extends %RegisteredObject
 /// - it SHOULD have context of the root resource type
 /// - The Autocomplete class should deal with traversing the AST and updating field suggestions,
 ///   NOT this class...
-Property ResourceContext As %DynamicObject;
-
-Property CurrentContext As %DynamicObject;
-
 Property Fields As %ArrayOfDataTypes;
-
-Property CollectionFields As %ListOfDataTypes;
-
-Property AvailableFields As %ListOfDataTypes;
-
-Property IsCollection As %Boolean;
-
-Property WithinFunction As %String;
 
 Property Loader As HS.FHIRMeta.Load.NpmLoader;
 
@@ -130,17 +118,25 @@ ClassMethod BuildResourceContext(pLoader As HS.FHIRMeta.Load.NpmLoader, pResourc
 	Return ctx
 }
 
-Method AddFieldType(pName, pType)
-{
-	Set currType = ..Fields.GetAt(pName)
-	If currType = "" {
-		Set newType = pType
-	} Else {
-		Set newType = currType _ "," _ pType
-	}
+// Method AddFieldType(pName, pType)
 
-	Do ..Fields.SetAt(newType, pName)
-}
+// {
+
+// 	Set currType = ..Fields.GetAt(pName)
+
+// 	If currType = "" {
+
+// 		Set newType = pType
+
+// 	} Else {
+
+// 		Set newType = currType _ "," _ pType
+
+// 	}
+
+// 	Do ..Fields.SetAt(newType, pName)
+
+// }
 
 /// InitialDefinitions are the field definitions we want to keep in the original context
 Method LoadContext(InitialDefinitions = "") [ Private ]
@@ -204,15 +200,13 @@ Method LoadDefinition(pStructureDefinition As %DynamicObject) [ Private ]
 	}
 }
 
-Method AdvanceString()
+Method IsCollectionField(pFieldName As %String) As %Boolean
 {
-	Set ..IsCollection = 0
-	Set ..SingletonDataType = "string"
-}
+	Set def = ..Definitions.GetAt(pFieldName)
 
-Method Reset()
-{
-	Do ..LoadContext(..ResourceContext)
+	Return:(def.max="*")||(def.max>1) 1
+
+	Return 0
 }
 
 Method TranslateFunctionToSuggestion(pFunctionName As %String) As %String
@@ -241,17 +235,13 @@ Method AdvanceFunction(pFunctionName As %String, pIsOp As %Boolean = 0) As %Bool
 
 	/// Special cases
 	If (fnName = "aggregate") {
-		/// TODO: Perhaps don't need to use ..AvailableFields, should be enough to set the
-		/// type of the field to "" within ..Fields
-		Do ..AvailableFields.Insert("iif(")
-		Do ..Fields.SetAt("", "$this")
-		Do ..Fields.SetAt("", "$total")
-
-		Do ..CollectionFields.Insert("$this")
-		Do ..CollectionFields.Insert("$total")
+		/// Add scoped variables and fields to the context
+		Do ..ScopedVariables.Insert("iif(")
+		Do ..ScopedVariables.Insert("$this")
+		Do ..ScopedVariables.Insert("$total")
 	} ElseIf (fnName = "as") {
 		/// We want to enumerate the types of all fields
-		Set iKey = ..Fields.Next("")
+		Set iKey = 	Fields.Next("")
 		Set replaceFields = ##class(%ArrayOfDataTypes).%New()
 		While iKey '= "" {
 			Set types = $LISTFROMSTRING(..Fields.GetAt(iKey), ",")
@@ -274,22 +264,17 @@ Method AdvanceFunction(pFunctionName As %String, pIsOp As %Boolean = 0) As %Bool
 			Do ..Fields.SetAt(tRS.%Get("type"), tRS.%Get("type"))
 		}
 	} ElseIf(fnName = "empty") {
-		Set ..SingletonDataType = "string"
 	} ElseIf (fnName = "exists") {
 		#; Write "Modified singleton type to bool"
-		Set ..IsCollection = 0
-		Set ..SingletonDataType = "boolean"
 	} ElseIf (fnName = "union") {
-		#; Do ..Reset()
-
 		/// After resetting context, we add the current resource type to the list of available fields
-		Do ..Fields.SetAt(..ResourceContext.type, ..ResourceContext.type)
+		#; Do ..Fields.SetAt(..ResourceContext.type, ..ResourceContext.type)
 	}
 
 
-	If $LISTFIND(primitiveFunctions, fnName) {
-		Set ..IsCollection = 0
-	}
+	#; If $LISTFIND(primitiveFunctions, fnName) {
+	#; 	Set ..IsCollection = 0
+	#; }
 
 	Quit 1
 }
@@ -400,16 +385,17 @@ Method AdvanceContext(pNextField As %String, pIsFunction As %Boolean = 0) As %Bo
 ClassMethod Test()
 {
 	#; Set ctx = ##class(FHIR.FHIRPath.FHIRContextHelper).%New($LB("http://hl7.org/fhir/StructureDefinition/Patient|4.0.1"))
+	Set loader = ##class(HS.FHIRMeta.Load.NpmLoader).%New($lb("hl7.fhir.r4.core@4.0.1"))
 	Set ac = ##class(FHIR.FHIRPath.Autocomplete).%New()
-	Set ctx = ..BuildResourceContext("Patient")
-	Set ast = ##class(FHIR.FHIRPath.Parser).ParseString("telecom.where(use=")
+	Set ctx = ..BuildResourceContext(loader, "Patient")
+	Set ast = ##class(FHIR.FHIRPath.Parser).ParseString("name.text.first()")
 
 	Do ac.InorderTraversal(ast, .ctx, .ftp, .sg, .rwfc)
 
 	#; w ctx.Snapshot.%ToJSON()
 	#; zw ctx.GetPropertyList()
 	#; zw ctx.GetSuggestionsList()
-	#; zw ctx.GetFunctionsList()
+	Do ctx.GetFunctionsList()
 
 	Return $$$OK
 }
@@ -430,56 +416,63 @@ Method GetPropertyList() As %ListOfDataTypes
 	Return props
 }
 
+/// Helper method to check if the current snapshot contains a given data type
+Method GetSnapshotTypes() As %List [ Private ]
+{
+	Return:'..Snapshot.%IsDefined("type") $lb()
+
+	#dim jsonArray As %DynamicArray
+	Set jsonArray = ..Snapshot.%Get("type")
+
+	Set iter = jsonArray.%GetIterator()
+
+	Set types = $lb()
+	While iter.%GetNext(.key, .value, .type) {
+		/// Types always have a "code" element
+		Set $LIST(types,*+1)=value.%Get("code")
+	}
+
+	Return types
+}
+
 Method GetFunctionsList() As %ListOfDataTypes
 {
 	Set fns = ##class(%ListOfDataTypes).%New()
 
 	/// Todo: Modify this IF statement, if all outputs are truly collections
-	If ..IsCollection||1 {
-		/// Add collection functions
-		Do fns.Insert(..TranslateFunctionToSuggestion("where"))
-		Do fns.Insert(..TranslateFunctionToSuggestion("exists"))
-		Do fns.Insert(..TranslateFunctionToSuggestion("empty"))
-		Do fns.Insert(..TranslateFunctionToSuggestion("first"))
-		Do fns.Insert(..TranslateFunctionToSuggestion("last"))
-		Do fns.Insert(..TranslateFunctionToSuggestion("skip"))
-		Do fns.Insert(..TranslateFunctionToSuggestion("tail"))
-		Do fns.Insert(..TranslateFunctionToSuggestion("take"))
-		Do fns.Insert(..TranslateFunctionToSuggestion("hasExtension"))
-		Do fns.Insert(..TranslateFunctionToSuggestion("ofType"))
-		Do fns.Insert(..TranslateFunctionToSuggestion("as"))
-		Do fns.Insert(..TranslateFunctionToSuggestion("is"))
-		Do fns.Insert(..TranslateFunctionToSuggestion("resolve"))
-		Do fns.Insert(..TranslateFunctionToSuggestion("union"))
-	}
+	/// Add collection functions
+	Do fns.Insert(..TranslateFunctionToSuggestion("where"))
+	Do fns.Insert(..TranslateFunctionToSuggestion("exists"))
+	Do fns.Insert(..TranslateFunctionToSuggestion("empty"))
+	Do fns.Insert(..TranslateFunctionToSuggestion("first"))
+	Do fns.Insert(..TranslateFunctionToSuggestion("last"))
+	Do fns.Insert(..TranslateFunctionToSuggestion("skip"))
+	Do fns.Insert(..TranslateFunctionToSuggestion("tail"))
+	Do fns.Insert(..TranslateFunctionToSuggestion("take"))
+	Do fns.Insert(..TranslateFunctionToSuggestion("hasExtension"))
+	Do fns.Insert(..TranslateFunctionToSuggestion("ofType"))
+	Do fns.Insert(..TranslateFunctionToSuggestion("as"))
+	Do fns.Insert(..TranslateFunctionToSuggestion("is"))
+	Do fns.Insert(..TranslateFunctionToSuggestion("resolve"))
+	Do fns.Insert(..TranslateFunctionToSuggestion("union"))
 
-	Set primitiveType = ""
+	/// Check primitive-type specific functions, only if this snapshot
+	/// can contain a primitive data type
+	Set types = ..GetSnapshotTypes()
 
-	#; Write !,"Singletondatatype: "_..SingletonDataType,!
-	If ('..IsCollection) && (..SingletonDataType '= "") {
-		Set primitiveType = ..SingletonDataType
-	} ElseIf (..CurrentContext.kind = "primitive-type") {
-		Set primitiveType = ..CurrentContext.type
-	}
-
-	#; Write !,..SingletonDataType,!,!,!
-	#; Write ..CurrentContext.type
-
-	#; w !,"Primtype: " _ primitiveType,!
-	If (primitiveType = "string") || (primitiveType = "code") {
+	If $LF(types, "string") || $LF(types, "code") {
 		Do fns.Insert(..TranslateFunctionToSuggestion("substring"))
 		Do fns.Insert(..TranslateFunctionToSuggestion("startsWith"))
 		Do fns.Insert(..TranslateFunctionToSuggestion("endsWith"))
 		Do fns.Insert(..TranslateFunctionToSuggestion("indexOf"))
-	} ElseIf (primitiveType = "boolean") {
+	}
+	
+	If $LF(types, "boolean") {
 		Do fns.Insert(..TranslateFunctionToSuggestion("not"))
-	} ElseIf (primitiveType = "date") {
-		/// No supported date/time functions
-	} ElseIf (primitiveType = "") {
-		/// This is not a primitive type
-		Do fns.Insert("descendants()")
-	} Else {
-		Throw ##class(%Exception.General).%New("Cannot handle primitive type " _ type,"-303444",,"Failed to handle primitive data type '" _ type _ "' for autocomplete")
+	}
+	
+	If $LF(types, "date") {
+		Throw ##class(%Exception.General).%New("Cannot handle primitive type " _ $LISTTOSTRING(types, ","),"-303444",,"Failed to handle primitive data type '" _ type _ "' for autocomplete")
 	}
 
 	Return fns
