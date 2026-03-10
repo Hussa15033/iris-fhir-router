@@ -6,16 +6,15 @@
 Class FHIR.FHIRPath.Autocomplete Extends %RegisteredObject
 {
 
-Property Resource As %String;
-
+/// The name of a resource or "" (empty string)
 Property ResourceFilter As %String;
 
-Property FHIRVersion As %String [ InitialExpression = "4.0.1" ];
+/// The FHIR Loader to load all metadata once
+Property Loader As HS.FHIRMeta.Load.NpmLoader;
 
-Property Paths As %ListOfDataTypes;
-
-Method %OnNew(pValidResource = "") As %Status
+Method %OnNew(pPackageId = "hl7.fhir.r4.core@4.0.1", pValidResource = "") As %Status
 {
+	Set ..Loader = ##class(HS.FHIRMeta.Load.NpmLoader).Load($lb(pPackageId))
 	Set ..ResourceFilter = pValidResource
 	Quit $$$OK
 }
@@ -26,7 +25,7 @@ Method OpAsFn(pOp As %String)
 	Return $CASE(pOp, "|":"union", :"")
 }
 
-Method InorderTraversal(pExpr As FHIR.FHIRPath.Expr.Expression, ByRef pCtx As FHIR.FHIRPath.FHIRContextHelper, ByRef finalTokenPrefix, ByRef refWithinFunctionCall = 0, withinFunctionCall = 0)
+Method InorderTraversal(pExpr As FHIR.FHIRPath.Expr.Expression, ByRef pCtx As FHIR.FHIRPath.FHIRContextHelper, ByRef finalTokenPrefix, ByRef suggestValues, ByRef refWithinFunctionCall = 0, withinFunctionCall = 0)
 {
 	/// Reach a leaf node
 	If (pExpr = "") {
@@ -37,24 +36,27 @@ Method InorderTraversal(pExpr As FHIR.FHIRPath.Expr.Expression, ByRef pCtx As FH
 	If cls = "FHIR.FHIRPath.Expr.BinaryExpr" {
 		Set savedContext = pCtx.Context
 		/// Traverse down the left tree
-		Do ..InorderTraversal(pExpr.Left, pCtx, .finalTokenPrefix, .refWithinFunctionCall, withinFunctionCall)
+		Do ..InorderTraversal(pExpr.Left, .pCtx, .finalTokenPrefix, .suggestValues, .refWithinFunctionCall, withinFunctionCall)
 		
 		Set opFn = ..OpAsFn(pExpr.Op)
-		Do:opFn'="" pCtx.AdvanceFunction(opFn)
+		Do:opFn'="" pCtx.AdvanceContext(opFn, 1)
 		If pExpr.Op = "|" {
 			/// If this is the union operator, we want to merge the context resulting from the RHS
 			/// Instantiate a new Context obj
 			Set leftCtx = ##class(FHIR.FHIRPath.FHIRContextHelper).%New(savedContext)
-			Do ..InorderTraversal(pExpr.Right, leftCtx, .finalTokenPrefix, .refWithinFunctionCall, withinFunctionCall)
+			Do ..InorderTraversal(pExpr.Right, leftCtx, .finalTokenPrefix, .suggestValues, .refWithinFunctionCall, withinFunctionCall)
 
 			Do pCtx.MergeContext(leftCtx.Context)
 		}
+
+		/// Suggest values only if the operator is equal to "="
+		Set suggestValues = (pExpr.Op = "=")
 		
 		/// If we successfully advance the operator, it means the operator doubles as both
 		/// a function and operator, so we move within
 		Set opSuccess = pCtx.AdvanceOperator(pExpr.Op)
 		Set:pCtx.AdvanceOperator(pExpr.Op) withinFunctionCall = 1
-		Do ..InorderTraversal(pExpr.Right, pCtx, .finalTokenPrefix, .refWithinFunctionCall, withinFunctionCall)
+		Do ..InorderTraversal(pExpr.Right, .pCtx, .finalTokenPrefix, .suggestValues, .refWithinFunctionCall, withinFunctionCall)
 	} ElseIf cls = "FHIR.FHIRPath.Expr.IdentExpr" {
 		Set finalTokenPrefix = pExpr.Name
 		Set refWithinFunctionCall = withinFunctionCall
@@ -64,23 +66,26 @@ Method InorderTraversal(pExpr As FHIR.FHIRPath.Expr.Expression, ByRef pCtx As FH
 		Set finalTokenPrefix = ""
 		#; Do pCtx.AdvanceContext(pExpr.Value)
 	} ElseIf cls = "FHIR.FHIRPath.Expr.CallExpr" {
-		Do pCtx.AdvanceContext(pExpr.Callee.Name, 1)
-		/// Todo: Need a better way of reverting context after function call
-		Set contextPrior = pCtx.CurrentContext
-		Do ..InorderTraversal(pExpr.Args.GetAt(pExpr.Args.Size), pCtx, .finalTokenPrefix, .refWithinFunctionCall, 1)
-		#; Write "Loading context prior to call: " _ pExpr.Callee.Name
-		
+		/// Duplicate the current context for use within the function
+		Set scopedCtx = pCtx.Duplicate()
+		Do scopedCtx.AdvanceContext(pExpr.Callee.Name, 1)
 
-		/// If the function call is not partial (i.e the function call has a closing ')'),
-		/// then we revert back to the original context
-		Do:pExpr.Partial=0 pCtx.LoadContext(contextPrior)
+		/// We only need to traverse through the last argument to update the context
+
+		Do ..InorderTraversal(pExpr.Args.GetAt(pExpr.Args.Size), .scopedCtx, .finalTokenPrefix, .suggestValues, .refWithinFunctionCall, 1)
+		Set:'pExpr.Partial suggestValues = 0
+
+		/// TODO: Check if the following plays nicely with all types of supported functions....
+		/// If the function call is partial (i.e. the function does not have a closing ')'),
+		/// we want to change the context to the new scoped context
+		Set:pExpr.Partial pCtx = scopedCtx
 	} ElseIf cls = "FHIR.FHIRPath.Expr.IndexExpr" {
-		Do ..InorderTraversal(pExpr.Field, pCtx, .finalTokenPrefix, .refWithinFunctionCall, withinFunctionCall)
+		Do ..InorderTraversal(pExpr.Field, .pCtx, .finalTokenPrefix, .suggestValues, .refWithinFunctionCall, withinFunctionCall)
 	} ElseIf (cls = "FHIR.FHIRPath.Expr.NumberExpr") || (cls = "FHIR.FHIRPath.Expr.DecimalExpr") {
 	} ElseIf (cls = "FHIR.FHIRPath.Expr.StringExpr") {
 		Do pCtx.AdvanceString()
 	} ElseIf cls = "FHIR.FHIRPath.Expr.UnaryExpr" { 
-		Do ..InorderTraversal(pExpr.Expr, pCtx, .finalTokenPrefix, .refWithinFunctionCall, withinFunctionCall)
+		Do ..InorderTraversal(pExpr.Expr, .pCtx, .finalTokenPrefix, .suggestValues, .refWithinFunctionCall, withinFunctionCall)
 	} Else {
 		Throw ##class(%Exception.General).%New("Unable to handle class " _cls)
 	}
@@ -88,56 +93,52 @@ Method InorderTraversal(pExpr As FHIR.FHIRPath.Expr.Expression, ByRef pCtx As FH
 	Quit
 }
 
+Method SearchResources(pSearch As %String) As %ListOfDataTypes [ Private ]
+{
+	Set output = ##class(%ListOfDataTypes).%New()
+	Set tRS = ##class(%SQL.Statement).%ExecDirect(,"SELECT DISTINCT(type) FROM HS_FHIRMeta_Storage.Rsrc WHERE (packageId %INLIST ?) AND kind='resource' AND %UPPER(type) LIKE ?", ..Loader.packageIdList, $ZCVT(pSearch, "U") _ "%")
+	While tRS.%Next() '= 0 {
+		Do output.Insert(tRS.%Get("type") _ ".")
+	}
+
+	Return output
+}
+
 Method Suggest(pExpression As %String) As %ListOfDataTypes
 {
 	Set outputList = ##class(%ListOfDataTypes).%New()
 
-	Set suggestedResources = ##class(%ListOfDataTypes).%New()
+	Set searchString = pExpression
+	Set resourceFilter = ..ResourceFilter
 
-	Set searchString = ""
-	/// First, locate the resource type.
-	If ..ResourceFilter '= "" {
-		/// Specific resource filter
-		Set ..Resource = ..ResourceFilter
-		Set tRS = ##class(%SQL.Statement).%ExecDirect(,"SELECT * FROM HS_FHIRMeta_Storage.Rsrc WHERE coreVersion=? AND id=type AND kind='resource' AND %UPPER(id) = ?", ..FHIRVersion, $ZCVT(..ResourceFilter, "U"))
-		Throw:tRS.%Next()=0 ##class(%Exception.General).%New("Resource not found","-30211",,"The resource '" _ ..ResourceFilter _ "' could not be found")
-		Set searchString = pExpression
-	} Else {
-		Set ..Resource = $PIECE(pExpression, ".")
-		/// Check if this resource is valid
-		Set tRS = ##class(%SQL.Statement).%ExecDirect(,"SELECT * FROM HS_FHIRMeta_Storage.Rsrc WHERE coreVersion=? AND id=type AND kind='resource' AND %UPPER(id) LIKE ?", ..FHIRVersion, $ZCVT(..Resource, "U") _ "%")
-
-		While tRS.%Next() '= 0 {
-			If (..Resource = tRS.%Get("id")) {
-				/// Full match found
-				Do suggestedResources.Clear()
-				Quit
-			} Else {
-				Do suggestedResources.Insert(tRS.%Get("id") _ ".")
-			}
-		}
-
-		// Remove the resource from the search string
+	/// If a resource filter isn't set, extract it from the expression
+	/// typically the FHIRPath expression begins with the resource type
+	If (resourceFilter = "") {
+		Set resourceSearch = $PIECE(pExpression, ".")
 		Set searchString = $PIECE(pExpression, ".", 2, *)
+		
+		Set resourceList = ..SearchResources(resourceSearch)
+
+		Return:resourceList.Size'=1 resourceList
+
+		Set resourceFilter = resourceSearch
 	}
 
-	Return:suggestedResources.Size>0 suggestedResources
-
-	/// Check if this resource exists
-	Set pathList = ##class(%ListOfDataTypes).%New()
-
-	Set ctx = ##class(FHIR.FHIRPath.FHIRContextHelper).BuildResourceContext(..Resource)
+	/// Create a context helper
+	Set ctx = ##class(FHIR.FHIRPath.FHIRContextHelper).%New(..Loader, resourceFilter)
 	
 	Set ast = ##class(FHIR.FHIRPath.Parser).ParseString(searchString)
 
 	/// We want to start by advancing into the resource itself
-	Do ctx.AdvanceContext(..Resource)
-	Do ..InorderTraversal(ast, ctx, .lastTokenFilter, .withinFnCall)
+	#; Do ctx.AdvanceContext(..Resource)
+	Do ..InorderTraversal(ast, .ctx, .lastTokenFilter, .suggestValues, .withinFnCall)
 	
 	#; Write "LastTokenFilter="_lastTokenFilter,!
 
 	Set propertyList = ctx.GetPropertyList()
 	Set fnList = ctx.GetFunctionsList()
+	Set suggestionList = ""
+	Set:suggestValues suggestionList = ctx.GetSuggestionsList()
 
 	#; Write "lasttoken=" _ lastTokenFilter,!,!
 	
@@ -160,6 +161,14 @@ Method Suggest(pExpression As %String) As %ListOfDataTypes
 		#; Continue:withinFnCall
 		If ($EXTRACT(fnList.GetAt(i), 1, $L(lastTokenFilter)) = lastTokenFilter) {
 			Do outputList.Insert(fnList.GetAt(i))
+		}
+	}
+
+	If suggestionList'="" {
+		For i=1:1:suggestionList.Size {
+			If ($EXTRACT(suggestionList.GetAt(i), 1, $L(lastTokenFilter)) = lastTokenFilter) {
+				Do outputList.Insert("'" _ suggestionList.GetAt(i) _ "'")
+			}
 		}
 	}
 	

@@ -14,7 +14,7 @@
 Class FHIR.FHIRPath.TestParser Extends %RegisteredObject
 {
 
-ClassMethod RunOneTest(pI, pSearchTerm, pSuggestion, pResourceFilter = "") As %Boolean
+ClassMethod RunOneTest(pI, pSearchTerm, pSuggestion, pPackage = "hl7.fhir.r4.core@4.0.1", pResourceFilter = "") As %Boolean
 {
 		Quit:(^AFPTestNumber'="")&&(pI'=^AFPTestNumber) 0
 		Write "Running test " _ pI _ "(" _ pSearchTerm _ ")"
@@ -26,7 +26,7 @@ ClassMethod RunOneTest(pI, pSearchTerm, pSuggestion, pResourceFilter = "") As %B
 				Set pSuggestion = $EXTRACT(pSuggestion, 2, *)
 				Set isNegativeTest = 1
 			}
-			Set autocomplete = ##class(FHIR.FHIRPath.Autocomplete).%New(pResourceFilter)
+			Set autocomplete = ##class(FHIR.FHIRPath.Autocomplete).%New(pPackage, pResourceFilter)
 
 			Set suggestionList = autocomplete.Suggest(pSearchTerm)
 
