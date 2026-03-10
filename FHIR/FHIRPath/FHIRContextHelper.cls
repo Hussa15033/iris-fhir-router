@@ -10,6 +10,8 @@
 Class FHIR.FHIRPath.FHIRContextHelper Extends %RegisteredObject
 {
 
+// Property Fields As %ArrayOfDataTypes;
+
 /// Todo: This class should be modified as follows:
 /// - Should be a class that can be used independently of the autocomplete engine
 /// - it's sole focus should be to hold the context to a FHIR resource/object
@@ -17,8 +19,6 @@ Class FHIR.FHIRPath.FHIRContextHelper Extends %RegisteredObject
 /// - it SHOULD have context of the root resource type
 /// - The Autocomplete class should deal with traversing the AST and updating field suggestions,
 ///   NOT this class...
-Property Fields As %ArrayOfDataTypes;
-
 Property Loader As HS.FHIRMeta.Load.NpmLoader;
 
 /// List of packages to support....
@@ -37,7 +37,7 @@ Property Context As %ListOfDataTypes;
 
 /// Any additional custom suggestions based on the scope,
 /// e.g. when within functions like `aggregate()`
-Property ScopedVariables As list Of %String;
+Property ScopedVariables As %ListOfDataTypes;
 
 /// Name of resource or primitive data type
 Property SingletonDataType As %String(VALUELIST = ",string,boolean");
@@ -56,6 +56,11 @@ Method %OnNew(pLoader As HS.FHIRMeta.Load.NpmLoader, pInitialContext = "") As %S
 Method Duplicate()
 {
 	Set ctx = ##class(FHIRContextHelper).%New(..Loader, ..Context)
+
+	/// Copy scoped variables
+	Set clonedScope = ..ScopedVariables.%ConstructClone(1, .clonedScope)
+
+	Set ctx.ScopedVariables = clonedScope
 	Return ctx
 }
 
@@ -204,7 +209,7 @@ Method IsCollectionField(pFieldName As %String) As %Boolean
 {
 	Set def = ..Definitions.GetAt(pFieldName)
 
-	Return:(def.max="*")||(def.max>1) 1
+	Return:(def '= "")&&((def.max="*")||(def.max>1)) 1
 
 	Return 0
 }
@@ -214,7 +219,7 @@ Method TranslateFunctionToSuggestion(pFunctionName As %String) As %String
 	Set fnName = $ZCVT(pFunctionName, "L")
 
 	/// Functions that take no parameters
-	Set zeroParameterFunctions = $LISTFROMSTRING("exists,empty,first,last,tail,not,resolve",",")
+	Set zeroParameterFunctions = $LISTFROMSTRING("exists,empty,first,last,tail,not,resolve,descendants",",")
 
 	/// Function that return a primitive, not a collection
 	Set primitiveFunctions = $LISTFROMSTRING("exists,empty",",")
@@ -239,29 +244,41 @@ Method AdvanceFunction(pFunctionName As %String, pIsOp As %Boolean = 0) As %Bool
 		Do ..ScopedVariables.Insert("iif(")
 		Do ..ScopedVariables.Insert("$this")
 		Do ..ScopedVariables.Insert("$total")
+	} ElseIf (fnName = "iif") {
+		Do ..ScopedVariables.Insert("$index")
 	} ElseIf (fnName = "as") {
 		/// We want to enumerate the types of all fields
-		Set iKey = 	Fields.Next("")
-		Set replaceFields = ##class(%ArrayOfDataTypes).%New()
-		While iKey '= "" {
-			Set types = $LISTFROMSTRING(..Fields.GetAt(iKey), ",")
-			For i=1:1:$LL(types) {
-				Set type = $LG(types, i)
-				Set fieldText = type
-				Set:'pIsOp fieldText = type _ ")"
-				Do replaceFields.SetAt(type, fieldText)
-			}
-			Set iKey = ..Fields.Next(iKey)
+		/// Loop through all definitions and their snapshot
+		Throw ##class(%Exception.General).%New("as()not yet supported")
+		Kill k, types
+		Set allTypes = ""
+		While ..Definitions.GetNext(.k) {
+			Set snapshot = ..Definitions.GetAt(k)
+			Set allTypes = allTypes _ "," _ ..GetSnapshotTypes(snapshot)
 		}
+		
+		#; Set iKey = 	Fields.Next("")
+		#; Set replaceFields = ##class(%ArrayOfDataTypes).%New()
+		#; While iKey '= "" {
+		#; 	Set types = $LISTFROMSTRING(..Fields.GetAt(iKey), ",")
+		#; 	For i=1:1:$LL(types) {
+		#; 		Set type = $LG(types, i)
+		#; 		Set fieldText = type
+		#; 		Set:'pIsOp fieldText = type _ ")"
+		#; 		Do replaceFields.SetAt(type, fieldText)
+		#; 	}
+		#; 	Set iKey = ..Fields.Next(iKey)
+		#; }
 
-		Set ..Fields = replaceFields
+		#; Set ..Fields = replaceFields
 	} ElseIf (fnName = "oftype") || (fnName = "is") {
+		Throw ##class(%Exception.General).%New("ofType() and is() not yet supported")
 		/// Todo: FHIRPath is case sensitive, make the necessary modifications to ensure all fields
 		/// properties and functions are case sensitive
 		/// Select all types from SQL
 		Set tRS = ##class(%SQL.Statement).%ExecDirect(,"SELECT DISTINCT(type) FROM HS_FHIRMeta_Storage.Rsrc WHERE coreVersion=? AND (kind='resource' OR kind='complex-type' OR kind='primitive-type')", "4.0.1")
 		While tRS.%Next() {
-			Do ..Fields.SetAt(tRS.%Get("type"), tRS.%Get("type"))
+			#; Do ..Fields.SetAt(tRS.%Get("type"), tRS.%Get("type"))
 		}
 	} ElseIf(fnName = "empty") {
 	} ElseIf (fnName = "exists") {
@@ -355,9 +372,9 @@ Method AdvanceContext(pNextField As %String, pIsFunction As %Boolean = 0) As %Bo
 		Throw ##class(%Exception.General).%New("Multiple data types for code found...")
 		/// This field has multiple next types because it is a choice field
 		/// Only keep this field within the current context
-		Set nextTypes = ..Fields.GetAt(pNextField)
-		Do ..Fields.Clear()
-		Do ..Fields.SetAt(nextTypes, pNextField)
+		#; Set nextTypes = ..Fields.GetAt(pNextField)
+		#; Do ..Fields.Clear()
+		#; Do ..Fields.SetAt(nextTypes, pNextField)
 		Quit 1
 	}
 
@@ -403,26 +420,25 @@ ClassMethod Test()
 Method GetPropertyList() As %ListOfDataTypes
 {
 	Set props = ##class(%ListOfDataTypes).%New()
-	While ..Definitions.GetNext(.k) {
-		Set broken = $LISTFROMSTRING(k, ".")
-		Do props.Insert($LG(broken, 1))
-		#; Write "Looping through properties..." _ k,!
+	While ..Definitions.GetNext(.k1) {
+		Set broken = $LISTFROMSTRING(k1, ".")
+		Do:$LL(broken)=1 props.Insert($LG(broken, 1))
 	}
 
-	While ..ScopedVariables.Next(.k) {
-		Do props.Insert(..ScopedVariables.GetAt(k))
+	For i=1:1:..ScopedVariables.Size {
+		Do props.Insert(..ScopedVariables.GetAt(i))
 	}
-
 	Return props
 }
 
-/// Helper method to check if the current snapshot contains a given data type
-Method GetSnapshotTypes() As %List [ Private ]
+/// Helper method to check if the current/given snapshot contains a given data type
+Method GetSnapshotTypes(pSnapshot As %DynamicObject = {..Snapshot}) As %List [ Private ]
 {
-	Return:'..Snapshot.%IsDefined("type") $lb()
+
+	Return:'pSnapshot.%IsDefined("type") $lb()
 
 	#dim jsonArray As %DynamicArray
-	Set jsonArray = ..Snapshot.%Get("type")
+	Set jsonArray = pSnapshot.%Get("type")
 
 	Set iter = jsonArray.%GetIterator()
 
@@ -455,6 +471,7 @@ Method GetFunctionsList() As %ListOfDataTypes
 	Do fns.Insert(..TranslateFunctionToSuggestion("is"))
 	Do fns.Insert(..TranslateFunctionToSuggestion("resolve"))
 	Do fns.Insert(..TranslateFunctionToSuggestion("union"))
+	Do fns.Insert(..TranslateFunctionToSuggestion("descendants"))
 
 	/// Check primitive-type specific functions, only if this snapshot
 	/// can contain a primitive data type

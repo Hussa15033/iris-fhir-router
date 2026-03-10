@@ -166,6 +166,7 @@ ClassMethod Test(pDebug = 0, pTestNumber = "")
 	Do ..RunOneTest(98, "ServiceRequest.category.coding.where(system='https://fhir.hl7.org.uk/CodeSystem/UKCore-GenomeSequencingCategory' and code=", "'cancer-wgs'", "fhir.r4.ukcore.stu3.currentbuild@0.25.0-pre-release")
 	Do ..RunOneTest(99, "ServiceRequest.category.coding.where(system='https://fhir.hl7.org.uk/CodeSystem/UKCore-GenomeSequencingCategory' and code=", "!'cancer-wgs'")
 	Do ..RunOneTest(100, "ServiceRequest.category.coding.where(system='https://fhir.hl7.org.uk/CodeSystem/UKCore-GenomeSequencingCategory' and code=", "!'cancer-wgs'")
+	Do ..RunOneTest(101, "Observation.value.aggregate(iif(", "$this")
 	
 	Set percentPassed = $NUMBER((^AFPTestsSuccess / ^AFPTests) * 100, 1)
 	Write !,"Tests passed: " _ ^AFPTestsSuccess _ " / " _ ^AFPTests _ "(" _ percentPassed _ "%)",!
