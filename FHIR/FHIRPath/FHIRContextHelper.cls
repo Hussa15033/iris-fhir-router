@@ -152,9 +152,9 @@ Method LoadContext(InitialDefinitions = "") [ Private ]
 	For i=1:1:..Context.Size {
 		Set code = ..Context.GetAt(i)
 		Set els = $LISTFROMSTRING(code, "|")
-		Set tRS = ##class(%SQL.Statement).%ExecDirect(,"SELECT * FROM HS_FHIRMeta_Storage.Rsrc WHERE url=? AND version=? AND resourceType='StructureDefinition'", $LG(els, 1), $LG(els, 2))
-		Throw:tRS.%Next()=0 ##class(%Exception.General).%New("StructureDefinition for '" _ code _ "' does not exist", "-20322",,"")
-		Set sd = {}.%FromJSON(tRS.%Get("json"))
+		Set resource = ##class(HS.FHIRMeta.Storage.Rsrc).UrlIndexOpen($LG(els, 1), $LG(els, 2))
+		Throw:resource="" ##class(%Exception.General).%New("StructureDefinition for '" _ code _ "' does not exist", "-20322",,"")
+		Set sd = resource.RsrcJsonAsDynObj()
 
 		Do ..LoadDefinition(sd)
 	}
