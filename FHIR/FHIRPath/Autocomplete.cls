@@ -93,11 +93,16 @@ Method InorderTraversal(pExpr As FHIR.FHIRPath.Expr.Expression, ByRef pCtx As FH
 	Quit
 }
 
+/// Returns a list of resources to search or "" (empty string) if pSearch is a valid resource
 Method SearchResources(pSearch As %String) As %ListOfDataTypes [ Private ]
 {
 	Set output = ##class(%ListOfDataTypes).%New()
 	Set tRS = ##class(%SQL.Statement).%ExecDirect(,"SELECT DISTINCT(type) FROM HS_FHIRMeta_Storage.Rsrc WHERE (packageId %INLIST ?) AND kind='resource' AND %UPPER(type) LIKE ?", ..Loader.packageIdList, $ZCVT(pSearch, "U") _ "%")
 	While tRS.%Next() '= 0 {
+		Set type = tRS.%Get("type")
+		If ($ZCVT(type, "U") = $ZCVT(pSearch, "U")) {
+			Return ""
+		}
 		Do output.Insert(tRS.%Get("type") _ ".")
 	}
 
@@ -116,21 +121,23 @@ Method Suggest(pExpression As %String) As %ListOfDataTypes
 	If (resourceFilter = "") {
 		Set resourceSearch = $PIECE(pExpression, ".")
 		Set searchString = $PIECE(pExpression, ".", 2, *)
+
 		
 		Set resourceList = ..SearchResources(resourceSearch)
 
-		Return:resourceList.Size'=1 resourceList
+		Return:resourceList'="" resourceList
 
 		Set resourceFilter = resourceSearch
 	}
 
 	/// Create a context helper
-	Set ctx = ##class(FHIR.FHIRPath.FHIRContextHelper).%New(..Loader, resourceFilter)
+	Set ctx = ##class(FHIR.FHIRPath.FHIRContextHelper).BuildResourceContext(..Loader, resourceFilter)
 	
 	Set ast = ##class(FHIR.FHIRPath.Parser).ParseString(searchString)
 
 	/// We want to start by advancing into the resource itself
 	#; Do ctx.AdvanceContext(..Resource)
+	Set suggestValues = 0
 	Do ..InorderTraversal(ast, .ctx, .lastTokenFilter, .suggestValues, .withinFnCall)
 	
 	#; Write "LastTokenFilter="_lastTokenFilter,!

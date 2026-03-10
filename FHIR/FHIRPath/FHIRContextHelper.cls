@@ -56,7 +56,7 @@ Property SingletonDataType As %String(VALUELIST = ",string,boolean");
 
 Property Function As %String;
 
-Method %OnNew(pLoader As HS.FHIRMeta.Load.NpmLoader, pResource As %String, pInitialContext = "") As %Status
+Method %OnNew(pLoader As HS.FHIRMeta.Load.NpmLoader, pInitialContext = "") As %Status [ Private ]
 {
 	Set ..Loader = pLoader
 	Do ..ResetContext(pInitialContext)
@@ -114,13 +114,18 @@ Method MergeContext(pContext)
 	}
 }
 
-ClassMethod BuildResourceContext(pResource As %String) As FHIR.FHIRPath.FHIRContextHelper
+ClassMethod BuildResourceContext(pLoader As HS.FHIRMeta.Load.NpmLoader, pResource As %String) As FHIR.FHIRPath.FHIRContextHelper
 {
-	Set tRS = ##class(%SQL.Statement).%ExecDirect(,"SELECT * FROM HS_FHIRMeta_Storage.Rsrc WHERE coreVersion=? AND id=type AND kind='resource' AND %UPPER(id)=?", "4.0.1", $ZCVT(pResource, "U"))
+	/// Find the snapshot element from the db based on the packageIdList
+	/// Since the loader.packageIdList is ordered so the core version appears first
+	/// We use the $LISTFIND method to order by the appearance in the packageIdList descending
+	/// to prioritise custom profiles
+	Set tRS = ##class(%SQL.Statement).%ExecDirect(,"SELECT url,version FROM HS_FHIRMeta_Storage.Rsrc WHERE (packageId %INLIST ?) AND kind='resource' AND %UPPER(type)=? ORDER BY $LISTFIND(?, packageId) DESC", pLoader.packageIdList, $ZCVT(pResource, "U"), pLoader.packageIdList)
 	Throw:tRS.%Next()=0 ##class(%Exception.General).%New("Resource '" _ pResource _ "' does not exist", "-20322",,"")
-	Set sd = {}.%FromJSON(tRS.%Get("json"))
+	Set profileUrl = tRS.%Get("url")
+	Set profileVersion = tRS.%Get("version")
 
-	Set ctx = ##class(FHIR.FHIRPath.FHIRContextHelper).%New($lb("http://hl7.org/fhir/StructureDefinition/" _ pResource _ "|4.0.1"))
+	Set ctx = ..%New(pLoader, $lb(profileUrl _ "|" _ profileVersion))
 
 	Return ctx
 }

@@ -41,6 +41,7 @@ ClassMethod RunOneTest(pI, pSearchTerm, pSuggestion, pPackage = "hl7.fhir.r4.cor
 			W:^AFPDEBUG "Exception occurred"
 			W:^AFPDEBUG ex.DisplayString()
 			Set found = ""
+			W " - Exception occurred",!
 			Return 0
 		}
 
@@ -78,12 +79,12 @@ ClassMethod Test(pDebug = 0, pTestNumber = "")
 	Do ..RunOneTest(66, "Observation.component.where(value.ofTy", "ofType(")
 	Do ..RunOneTest(67, "Observation.component.where(value.as(P", "Period)")
 	Do ..RunOneTest(68, "Observation.component.where(value as Qu", "Quantity")
-	Do ..RunOneTest(69, "true or false", "", "Patient")
-	Do ..RunOneTest(70, "true xor false", "", "Patient")
-	Do ..RunOneTest(71, "true implies false", "", "Patient")
+	Do ..RunOneTest(69, "true or false", "",, "Patient")
+	Do ..RunOneTest(70, "true xor false", "",, "Patient")
+	Do ..RunOneTest(71, "true implies false", "",, "Patient")
 	Do ..RunOneTest(72, "Practitioner.name[0] is Huma", "HumanName")
-	Do ..RunOneTest(73, "'string1' & ' and ' & 'string2'", "", "Patient")
-	Do ..RunOneTest(74, "5 seconds + 3 seconds", "", "Patient")
+	Do ..RunOneTest(73, "'string1' & ' and ' & 'string2'", "",, "Patient")
+	Do ..RunOneTest(74, "5 seconds + 3 seconds", "",, "Patient")
 	Do ..RunOneTest(75, "Patient.contact.telecom.where(use = 'official').ex", "exists()")
 	Do ..RunOneTest(76, "Patient.contact.telecom.where(use = 'official').ex", "!not()")
 	Do ..RunOneTest(77, "Patient.contact.telecom.where(use = 'official').exists().", "not()")
