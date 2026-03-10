@@ -41,6 +41,7 @@ ClassMethod RunOneTest(pI, pSearchTerm, pSuggestion, pResourceFilter = "") As %B
 			W:^AFPDEBUG "Exception occurred"
 			W:^AFPDEBUG ex.DisplayString()
 			Set found = ""
+			Return 0
 		}
 
 		/// If the test is negative 
