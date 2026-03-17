@@ -78,6 +78,7 @@ Method ResetContext(pContext = "")
 }
 
 /// Converts an $lb() into a %ListOfDataTypes if required
+/// TODO: Change name of this fn or convert all lists in this class to one or the other..
 Method ValidateList(pList = "") As %ListOfDataTypes [ Internal ]
 {
 	Quit:pList="" ""
@@ -116,7 +117,9 @@ ClassMethod BuildResourceContext(pLoader As HS.FHIRMeta.Load.NpmLoader, pResourc
 	/// Since the loader.packageIdList is ordered so the core version appears first
 	/// We use the $LISTFIND method to order by the appearance in the packageIdList descending
 	/// to prioritise custom profiles
-	Set tRS = ##class(%SQL.Statement).%ExecDirect(,"SELECT url,version FROM HS_FHIRMeta_Storage.Rsrc WHERE (packageId %INLIST ?) AND kind='resource' AND %UPPER(type)=? ORDER BY $LISTFIND(?, packageId) DESC", pLoader.packageIdList, $ZCVT(pResource, "U"), pLoader.packageIdList)
+
+	/// TODO: Should probably build a global for basedefinitions for faster access
+	Set tRS = ##class(%SQL.Statement).%ExecDirect(,"SELECT TOP 1 url,version FROM HS_FHIRMeta_Storage.Rsrc WHERE (packageId %INLIST ?) AND kind='resource' AND %UPPER(type)=? ORDER BY $LISTFIND(?, packageId) DESC, (CASE WHEN id = type THEN 1 ELSE 0 END) DESC", pLoader.packageIdList, $ZCVT(pResource, "U"), pLoader.packageIdList)
 	Throw:tRS.%Next()=0 ##class(%Exception.General).%New("Resource '" _ pResource _ "' does not exist", "-20322",,"")
 	Set profileUrl = tRS.%Get("url")
 	Set profileVersion = tRS.%Get("version")
@@ -185,25 +188,54 @@ Method LoadDefinition(pStructureDefinition As %DynamicObject) [ Private ]
 		/// Patient.contact.id => contact.id
 		Set propName = $LISTTOSTRING(props, ".")
 
-		Set types = value.type
-		Continue:types=""	
+		Do ..AddFieldDefinition(propName, value)
+	}
+}
+
+/// We use a helper method as a wrapper to filter out noise from the
+/// definition
+Method AddFieldDefinition(pFieldName As %String, pDefinition As %DynamicObject, pArray As %ArrayOfObjects = {..Definitions})
+{
+	Set path = pDefinition.path
+	Set min = pDefinition.min
+	Set max = pDefinition.max
+	Set types = pDefinition.type
+	Set bindings = pDefinition.binding
+	Return:types=""
+	Return:pFieldName=""
+	Return:pDefinition.%IsDefined("sliceName")
+
+	/// Add base definition
+	Set json = {
+		"path": ($REPLACE(path, "[x]", "")),
+		"min": (min),
+		"max": (max),
+		"type": (types),
+		"binding": (bindings)
+	}
+
+	Do pArray.SetAt(json, $REPLACE(pFieldName, "[x]", ""))
+	If pFieldName [ "[x]" {
+		/// Loop through the data types
 		Set typeIter = types.iterator()
 		While (typeIter.%GetNext(.k1, .type)) {
 			Set code = type.code
-			Set fieldName = propName
 
-			/// TODO: ADD SUPPORT FOR [X] ELEMENTS
-			#; If (propName [ "[x]") {
-			#; 	/// The value replacing [x] is camel case of the type of the property
-			#; 	Set upperCaseType = $ZCVT($EXTRACT(code, 1, 1), "U") _ $EXTRACT(code, 2, *)
-			#; 	Set fieldName = $REPLACE(propName, "[x]", upperCaseType)
+			/// The value replacing [x] is camel case of the type of the property
+			Set upperCaseType = $ZCVT($EXTRACT(code, 1, 1), "U") _ $EXTRACT(code, 2, *)
+			Set fieldName = $REPLACE(pFieldName, "[x]", upperCaseType)
+			Set path = $REPLACE(path, "[x]", upperCaseType)
+			Set types = [(type)]
 
-			#; 	/// We also want to add this data type to the original field definition
-			#; 	Do ..AddFieldType($REPLACE(propName, "[x]", ""), code)
-			#; }
+			Set json = {
+				"path": (path),
+				"min": (min),
+				"max": (max),
+				"type": (types),
+				"binding": (bindings)
+			}
 
-			#; Write "Setting definition " _ fieldName _ "..",!
-			Do ..Definitions.SetAt(value, fieldName)
+			Do pArray.SetAt(json, fieldName)
 		}
 	}
 }
@@ -252,28 +284,23 @@ Method AdvanceFunction(pFunctionName As %String, pIsOp As %Boolean = 0) As %Bool
 	} ElseIf (fnName = "as") {
 		/// We want to enumerate the types of all fields
 		/// Loop through all definitions and their snapshot
-		Throw ##class(%Exception.General).%New("as() not yet supported")
-		Kill k, types
+		Kill types
 		Set allTypes = ""
-		While ..Definitions.GetNext(.k) {
-			Set snapshot = ..Definitions.GetAt(k)
-			Set allTypes = allTypes _ "," _ ..GetSnapshotTypes(snapshot)
-		}
-		
-		#; Set iKey = 	Fields.Next("")
-		#; Set replaceFields = ##class(%ArrayOfDataTypes).%New()
-		#; While iKey '= "" {
-		#; 	Set types = $LISTFROMSTRING(..Fields.GetAt(iKey), ",")
-		#; 	For i=1:1:$LL(types) {
-		#; 		Set type = $LG(types, i)
-		#; 		Set fieldText = type
-		#; 		Set:'pIsOp fieldText = type _ ")"
-		#; 		Do replaceFields.SetAt(type, fieldText)
-		#; 	}
-		#; 	Set iKey = ..Fields.Next(iKey)
-		#; }
 
-		#; Set ..Fields = replaceFields
+		While ..Definitions.GetNext(.k) {
+			#; Write !,"Getting - " _ k
+			Set snapshot = ..Definitions.GetAt(k)
+			Set allTypes = allTypes _ ..GetSnapshotTypes(snapshot, allTypes)
+		}
+
+		If 'pIsOp {
+			For i=1:1:$LL(allTypes) {
+				Set $LIST(allTypes, i) = $LG(allTypes, i) _ ")"
+			}
+		}
+
+		Do ..OverrideFields.Clear()
+		Set ..OverrideFields = ..ValidateList(allTypes)
 	} ElseIf (fnName = "oftype") || (fnName = "is") {
 		/// Todo: FHIRPath is case sensitive, make the necessary modifications to ensure all fields
 		/// properties and functions are case sensitive
@@ -286,11 +313,10 @@ Method AdvanceFunction(pFunctionName As %String, pIsOp As %Boolean = 0) As %Bool
 	} ElseIf (fnName = "exists") {
 		#; Write "Modified singleton type to bool"
 	} ElseIf (fnName = "union") {
-		W "Doing union...",!
+		#; W "Doing union...",!
 		/// After resetting context, we add the current resource type to the list of available fields
 		#; Do ..Fields.SetAt(..ResourceContext.type, ..ResourceContext.type)
 	}
-
 
 	#; If $LISTFIND(primitiveFunctions, fnName) {
 	#; 	Set ..IsCollection = 0
@@ -310,7 +336,7 @@ Method AdvanceOperator(pOp As %String) As %Boolean
 		///		- "Practitioner.name[0] is HumanN" should suggest "HumanName" NOT "HumanName."
 		///		- "Practitioner.name.family | Pra" should suggest "Practitioner." NOT "Practitioner"
 		Do ..AdvanceFunction("union", 1)
-		Write "Advancing operator..."
+		#; Write "Advancing operator..."
 		Quit 0
 	} ElseIf (pOp = "is") {
 		Quit ..AdvanceFunction("is", 1)
@@ -324,6 +350,7 @@ Method AdvanceContext(pNextField As %String, pIsFunction As %Boolean = 0) As %Bo
 	#; Write !,"Advancing " _ pNextField _ "..."
 	/// Switch the FHIR context helper to the context
 	/// specified by pNextField
+
 	If (pIsFunction) {
 		Set validFn = ..AdvanceFunction(pNextField)
 		Set tSC = $$$OK
@@ -348,10 +375,10 @@ Method AdvanceContext(pNextField As %String, pIsFunction As %Boolean = 0) As %Bo
 	Set replaceDefinitions = ##class(%ArrayOfObjects).%New()
 	Set key = ""
 	While (..Definitions.GetNext(.key)) {
-		Set props2 = $LISTFROMSTRING(..Definitions.GetAt(key), ".")
+		Set props2 = $LISTFROMSTRING(key, ".")
 		If (pNextField = $LISTGET(props2, 1)) {
 			/// This field is hanging
-			Do replaceDefinitions.SetAt(..Definitions.GetAt(key), $LG(props2, 2))
+			Do ..AddFieldDefinition($LG(props2, 2), ..Definitions.GetAt(key), replaceDefinitions)
 		}
 	}
 
@@ -397,12 +424,12 @@ Method AdvanceContext(pNextField As %String, pIsFunction As %Boolean = 0) As %Bo
 		Set split = $LISTFROMSTRING(key, ".")
 		#; Write "Key = " _ key _ ","_ $LG(split, 1),!
 		If ($LG(split, 1) = pNextField) && ($LL(split) = 2) {
-			Do newDefinitions.SetAt(..Definitions.GetAt(key), $LG(split, 2))
+			Do ..AddFieldDefinition($LG(split, 2), ..Definitions.GetAt(key), .newDefinitions)
+			#; Do newDefinitions.SetAt(..Definitions.GetAt(key), $LG(split, 2))
 		}
 	}
 
 	Do ..LoadContext(newDefinitions)
-
 	Return 1
 }
 
@@ -422,6 +449,13 @@ ClassMethod Test()
 	Do ctx.GetFunctionsList()
 
 	Return $$$OK
+}
+
+/// Helper method to convert a type code into
+/// a canonical URL StructureDefinition
+Method ToCanonSD(pDatatype) As %String
+{
+	Return "http://hl7.org/fhir/StructureDefinition/" _ pDatatype _ "|" _ ..Loader.coreVersion
 }
 
 Method GetPropertyList() As %ListOfDataTypes
@@ -444,7 +478,7 @@ Method GetPropertyList() As %ListOfDataTypes
 }
 
 /// Helper method to check if the current/given snapshot contains a given data type
-Method GetSnapshotTypes(pSnapshot As %DynamicObject = {..Snapshot}) As %List [ Private ]
+Method GetSnapshotTypes(pSnapshot As %DynamicObject = {..Snapshot}, pAcc As %List = "") As %List [ Private ]
 {
 
 	Return:'pSnapshot.%IsDefined("type") $lb()
@@ -454,10 +488,16 @@ Method GetSnapshotTypes(pSnapshot As %DynamicObject = {..Snapshot}) As %List [ P
 
 	Set iter = jsonArray.%GetIterator()
 
-	Set types = $lb()
+	Set types = ""
 	While iter.%GetNext(.key, .value, .type) {
 		/// Types always have a "code" element
-		Set $LIST(types,*+1)=value.%Get("code")
+		Continue:value.%IsDefined("extension")
+
+		Set code = value.%Get("code")
+
+		Continue:pAcc'=""&&$LF(pAcc, code)
+
+		Set:code'="" types = types _ $lb(code)
 	}
 
 	Return types
@@ -509,8 +549,14 @@ Method GetFunctionsList() As %ListOfDataTypes
 
 /// TODO: Implement and use this method
 /// Helper method to perform a lookup and return a %DynamicObject
-Method Lookup(pResourceType, pCanonicalURL, pVersion)
+Method Lookup(pCanonicalURL, pVersion = "") As HS.FHIRMeta.Storage.Rsrc
 {
+	/// TODO:
+	/// Utilise this lookup everywhere thats needed
+	If pVersion = "" {
+		Set pVersion = $PIECE(pCanonicalURL, "|", 2)
+	}
+	Return ##class(HS.FHIRMeta.Storage.Rsrc).UrlIndexOpen(pCanonicalURL, pVersion)
 }
 
 Method GetSuggestionsList() As %ListOfDataTypes
