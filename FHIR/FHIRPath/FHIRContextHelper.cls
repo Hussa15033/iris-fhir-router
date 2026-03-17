@@ -402,7 +402,8 @@ Method AdvanceContext(pNextField As %String, pIsFunction As %Boolean = 0) As %Bo
 		$$$ThrowOnError(tSC)
 		Quit:validField=0 0
 	} Else {
-		Throw ##class(%Exception.General).%New("Multiple data types for code found...")
+		#; Write definition.%ToJSON()
+		#; Throw ##class(%Exception.General).%New("Multiple data types for code found...")
 		/// This field has multiple next types because it is a choice field
 		/// Only keep this field within the current context
 		#; Set nextTypes = ..Fields.GetAt(pNextField)
