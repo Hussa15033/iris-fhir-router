@@ -42,6 +42,9 @@ Property ScopedVariables As %ListOfDataTypes;
 /// Name of resource or primitive data type
 Property SingletonDataType As %String(VALUELIST = ",string,boolean");
 
+/// A property used to override the fields return by this context
+Property OverrideFields As %ListOfDataTypes;
+
 Property Function As %String;
 
 Method %OnNew(pLoader As HS.FHIRMeta.Load.NpmLoader, pInitialContext = "") As %Status [ Private ]
@@ -249,7 +252,7 @@ Method AdvanceFunction(pFunctionName As %String, pIsOp As %Boolean = 0) As %Bool
 	} ElseIf (fnName = "as") {
 		/// We want to enumerate the types of all fields
 		/// Loop through all definitions and their snapshot
-		Throw ##class(%Exception.General).%New("as()not yet supported")
+		Throw ##class(%Exception.General).%New("as() not yet supported")
 		Kill k, types
 		Set allTypes = ""
 		While ..Definitions.GetNext(.k) {
@@ -272,18 +275,18 @@ Method AdvanceFunction(pFunctionName As %String, pIsOp As %Boolean = 0) As %Bool
 
 		#; Set ..Fields = replaceFields
 	} ElseIf (fnName = "oftype") || (fnName = "is") {
-		Throw ##class(%Exception.General).%New("ofType() and is() not yet supported")
 		/// Todo: FHIRPath is case sensitive, make the necessary modifications to ensure all fields
 		/// properties and functions are case sensitive
 		/// Select all types from SQL
-		Set tRS = ##class(%SQL.Statement).%ExecDirect(,"SELECT DISTINCT(type) FROM HS_FHIRMeta_Storage.Rsrc WHERE coreVersion=? AND (kind='resource' OR kind='complex-type' OR kind='primitive-type')", "4.0.1")
+		Set tRS = ##class(%SQL.Statement).%ExecDirect(,"SELECT DISTINCT(type) FROM HS_FHIRMeta_Storage.Rsrc WHERE coreVersion=? AND (kind='resource' OR kind='complex-type' OR kind='primitive-type')", ..Loader.coreVersion)
 		While tRS.%Next() {
-			#; Do ..Fields.SetAt(tRS.%Get("type"), tRS.%Get("type"))
+			Do ..OverrideFields.Insert(tRS.%Get("type"))
 		}
 	} ElseIf(fnName = "empty") {
 	} ElseIf (fnName = "exists") {
 		#; Write "Modified singleton type to bool"
 	} ElseIf (fnName = "union") {
+		W "Doing union...",!
 		/// After resetting context, we add the current resource type to the list of available fields
 		#; Do ..Fields.SetAt(..ResourceContext.type, ..ResourceContext.type)
 	}
@@ -307,6 +310,7 @@ Method AdvanceOperator(pOp As %String) As %Boolean
 		///		- "Practitioner.name[0] is HumanN" should suggest "HumanName" NOT "HumanName."
 		///		- "Practitioner.name.family | Pra" should suggest "Practitioner." NOT "Practitioner"
 		Do ..AdvanceFunction("union", 1)
+		Write "Advancing operator..."
 		Quit 0
 	} ElseIf (pOp = "is") {
 		Quit ..AdvanceFunction("is", 1)
@@ -336,6 +340,8 @@ Method AdvanceContext(pNextField As %String, pIsFunction As %Boolean = 0) As %Bo
 		#; $$$ThrowOnError(tSC)
 		Quit 0
 	}
+
+
 
 	/// Loop through all definitions, as this may be part of a
 	/// sub element of a BackboneElement directly embedded in the resource
@@ -381,6 +387,7 @@ Method AdvanceContext(pNextField As %String, pIsFunction As %Boolean = 0) As %Bo
 
 	Do ..Context.Clear()
 	Do ..Context.Insert(tRS.%Get("url") _ "|" _ tRS.%Get("version"))
+	Do ..OverrideFields.Clear()
 
 	/// Now find any "hanging fields" before loading the new context
 	/// This ensures any hanging fields are included when traversing
@@ -419,7 +426,12 @@ ClassMethod Test()
 
 Method GetPropertyList() As %ListOfDataTypes
 {
+	If (..OverrideFields.Size > 0) {
+		Return ..OverrideFields
+	}
+
 	Set props = ##class(%ListOfDataTypes).%New()
+
 	While ..Definitions.GetNext(.k1) {
 		Set broken = $LISTFROMSTRING(k1, ".")
 		Do:$LL(broken)=1 props.Insert($LG(broken, 1))
@@ -484,9 +496,9 @@ Method GetFunctionsList() As %ListOfDataTypes
 		Do fns.Insert(..TranslateFunctionToSuggestion("indexOf"))
 	}
 	
-	If $LF(types, "boolean") {
+	#; If $LF(types, "boolean") {
 		Do fns.Insert(..TranslateFunctionToSuggestion("not"))
-	}
+	#; }
 	
 	If $LF(types, "date") {
 		Throw ##class(%Exception.General).%New("Cannot handle primitive type " _ $LISTTOSTRING(types, ","),"-303444",,"Failed to handle primitive data type '" _ type _ "' for autocomplete")
