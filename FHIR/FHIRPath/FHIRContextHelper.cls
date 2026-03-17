@@ -570,7 +570,7 @@ Method GetSuggestionsList() As %ListOfDataTypes
 
 	Set binding = ..Snapshot.%Get("binding")
 
-	If 'binding.%IsDefined("valueSet") {
+	If (binding="") || ('binding.%IsDefined("valueSet")) {
 		Return suggestions
 	}
 
