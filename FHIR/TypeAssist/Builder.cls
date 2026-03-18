@@ -15,9 +15,91 @@ ClassMethod Load(loader As HS.FHIRMeta.Load.NpmLoader)
 		Try {
 			Do $CLASSMETHOD($THIS, "Load" _ kind, json)
 		} Catch ex {
-
+			/// Todo: This try/catch should be removed once typeassist is completed,
+			/// we do not expect any exceptions to occur
+			If (ex.DisplayString() [ "METHOD DOES NOT EXIST") {
+				Write kind _ " not supported yet",!
+			} ElseIf (ex.DisplayString() [ "Complex type not handled") {
+			} Else {
+				Throw ##class(%Exception.General).%New("Exception: " _ ex.DisplayString())
+			}
 		}
 		
+	}
+}
+
+ClassMethod LoadResource(sd As %DynamicObject)
+{
+	Set rType = sd.type
+	Set els = sd.snapshot.element
+	Throw:els="" ##class(%Exception.General).%New("Snapshot not defined for resource " _ rType _ ": " _ sd.url)
+
+	Set els = sd.snapshot.element
+	Set iter = els.iterator()
+
+	Set aux = ""
+	While (iter.%GetNext(.key, .val, .type)) {
+		Set field = $PIECE(val.path, ".", 2, *)
+
+		Set fieldSet = $lb(field)
+
+		Continue:sd.type'="Patient"
+		Set choices = ..ExpandChoiceField(field, val.type, .aux)
+
+		zw choices
+		Set:(choices'="")&&$LISTVALID(choices) fieldSet = choices
+
+		Set base = "^FHIR.TypeAssist(""Resource"", """_sd.url_""", """_sd.type_""""
+
+		Set fixedVals = ..GetFixedValues(val)
+		#; zw val.path
+		#; zw sd.url
+		#; zw fieldSet
+		#; zw choices
+		#; zw aux
+		For i=1:1:$LL(fieldSet) {
+			Set fNameType = $LG(fieldSet, i)
+			Set fName = $PIECE(fNameType, ":", 1)
+			Set type = $PIECE(fNameType, ":", 2, *)
+
+			Set fieldSplit = $LISTFROMSTRING(fName, ".")
+			Set base2 = base
+
+			For j=1:1:$LL(fieldSplit) {
+				Set base2 = base2 _ ",""" _ $LG(fieldSplit, j) _ """"
+			}
+
+			Set base2 = base2 _ ")"
+
+			Set data = ""
+
+			If fName="active" {
+				zw $DATA(@base2)
+				zw $GET(@base2)
+				zw base2
+			}
+			If '$DATA(@base2) {
+				Set data = data _ $lb("type:" _ type)
+			} Else {
+				Set data = $GET(@base2)
+			}
+			If val.%IsDefined("binding") {
+				Set vSet = "vs:" _ val.binding.valueSet
+				Set:'$LF(data, vSet) data = data _ $lb(vSet)
+			}
+
+			If fixedVals '= "" {
+				For i=1:1:$LL(fixedVals) {
+					Set fv = "fv:" _ $LG(fixedVals, i)
+					Set:'$LF(data, fv) data = data _ $lb(fv)
+				}
+			}
+			If fName = "active" {
+				Write "Setting " _ base2 _ ":",!	
+				zw data
+			}
+			Set @base2 = data
+		}
 	}
 }
 
@@ -42,35 +124,41 @@ ClassMethod LoadExtension(sd As %DynamicObject)
 
 		Set fields = $lb(field)
 		Set choices = ..ExpandChoiceField(field, val.type)
-		Set:choices'="" fields = choices
+		Set:$LISTVALID(choices) fields = choices
 
-		Set fixedVal = ..GetFixedValue(val)
-	
+		Set fixedVals = ..GetFixedValues(val)
+		
 		For i=1:1:$LL(fields) {
-			Set ^FHIR.TypeAssist("Extension", sd.url, $LG(fields, i)) = $lb(fixedVal)
+			Set ^FHIR.TypeAssist("Extension", sd.url, $LG(fields, i)) = fixedVals
 		}
 	}
 }
 
-ClassMethod GetFixedValue(val As %DynamicObject)
+ClassMethod GetFixedValues(val As %DynamicObject)
 {
 	Set objIter = val.iterator()
 
-	Set fixedVal = ""
+	Set fixedVals = ""
 	While objIter.%GetNext(.k2, .v2, .t2) {
 		If k2 [ "fixed" {
-			Set fixedVal = v2
+			Set fixedVals = fixedVals _ $lb(v2)
 		}
 	}
 
-	Return fixedVal
+	Return fixedVals
 }
 
-ClassMethod ExpandChoiceField(pFieldName, pTypes)
+ClassMethod ExpandChoiceField(pFieldName, pTypes, aux = "") As %List
 {
-	Return:pFieldName'["[x]" ""
+	Return:pTypes="" ""
 
+	Set path = $LISTFROMSTRING($PIECE(pFieldName, ".", 1, *-1), ".")
+
+	If (path '= "") && ($GET(aux(path))) {
+		Set pTypes = aux(path)
+	}
 	Set list = ""
+	Set aux(pFieldName) = pTypes
 	/// Loop through the data types
 	Set typeIter = pTypes.iterator()
 	While (typeIter.%GetNext(.k1, .type)) {
@@ -80,7 +168,7 @@ ClassMethod ExpandChoiceField(pFieldName, pTypes)
 		Set upperCaseType = $ZCVT($EXTRACT(code, 1, 1), "U") _ $EXTRACT(code, 2, *)
 		Set fieldName = $REPLACE(pFieldName, "[x]", upperCaseType)
 		
-		Set list = list _ $lb(fieldName)
+		Set list = list _ $lb(fieldName _ ":" _ code)
 	}
 
 	Return list
