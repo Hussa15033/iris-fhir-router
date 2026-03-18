@@ -19,8 +19,8 @@ ClassMethod Load(loader As HS.FHIRMeta.Load.NpmLoader)
 			/// we do not expect any exceptions to occur
 			If (ex.DisplayString() [ "METHOD DOES NOT EXIST") {
 				Write kind _ " not supported yet",!
-			} ElseIf (ex.DisplayString() [ "Complex type not handled") {
 			} Else {
+				zw json.url
 				Throw ##class(%Exception.General).%New("Exception: " _ ex.DisplayString())
 			}
 		}
@@ -52,6 +52,7 @@ ClassMethod LoadResource(sd As %DynamicObject)
 		Set base = "^FHIR.TypeAssist(""Resource"", """_sd.url_""", """_sd.type_""""
 
 		Set fixedVals = ..GetFixedValues(val)
+		Set bindings = ..GetValueSets(val)
 		#; zw val.path
 		#; zw sd.url
 		#; zw fieldSet
@@ -83,9 +84,12 @@ ClassMethod LoadResource(sd As %DynamicObject)
 			} Else {
 				Set data = $GET(@base2)
 			}
-			If val.%IsDefined("binding") {
-				Set vSet = "vs:" _ val.binding.valueSet
-				Set:'$LF(data, vSet) data = data _ $lb(vSet)
+
+			If bindings '= "" {
+				For i=1:1:$LL(bindings) {
+					Set vs = "vs:" _ $LG(bindings, i)
+					Set:'$LF(data, vs) data = data _ $lb(vs)
+				}
 			}
 
 			If fixedVals '= "" {
@@ -101,6 +105,20 @@ ClassMethod LoadResource(sd As %DynamicObject)
 			Set @base2 = data
 		}
 	}
+}
+
+ClassMethod GetValueSets(sd As %DynamicObject)
+{
+	Set list = ""
+	If sd.%IsDefined("binding") {
+		Set iter = sd.binding.iterator()
+		While iter.%GetNext(.k1, .v1, .t1) {
+			Continue:k1'["valueSet"
+			Set list = list _ $lb(v1)
+		}
+	}
+
+	Return list
 }
 
 ClassMethod LoadComplexType(sd As %DynamicObject)
