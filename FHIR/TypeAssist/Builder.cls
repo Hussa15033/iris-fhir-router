@@ -34,77 +34,10 @@ ClassMethod LoadResource(sd As %DynamicObject)
 	Set els = sd.snapshot.element
 	Throw:els="" ##class(%Exception.General).%New("Snapshot not defined for resource " _ rType _ ": " _ sd.url)
 
-	Set els = sd.snapshot.element
-	Set iter = els.iterator()
+	Set global = "^FHIR.TypeAssist"
+	Set global = ..AppendSubscript(global, "Resource")
 
-	Set aux = ""
-	While (iter.%GetNext(.key, .val, .type)) {
-		Set field = $PIECE(val.path, ".", 2, *)
-
-		Set fieldSet = $lb(field)
-
-		Continue:sd.type'="Patient"
-		Set choices = ..ExpandChoiceField(field, val.type, .aux)
-
-		zw choices
-		Set:(choices'="")&&$LISTVALID(choices) fieldSet = choices
-
-		Set base = "^FHIR.TypeAssist(""Resource"", """_sd.url_""", """_sd.type_""""
-
-		Set fixedVals = ..GetFixedValues(val)
-		Set bindings = ..GetValueSets(val)
-		#; zw val.path
-		#; zw sd.url
-		#; zw fieldSet
-		#; zw choices
-		#; zw aux
-		For i=1:1:$LL(fieldSet) {
-			Set fNameType = $LG(fieldSet, i)
-			Set fName = $PIECE(fNameType, ":", 1)
-			Set type = $PIECE(fNameType, ":", 2, *)
-
-			Set fieldSplit = $LISTFROMSTRING(fName, ".")
-			Set base2 = base
-
-			For j=1:1:$LL(fieldSplit) {
-				Set base2 = base2 _ ",""" _ $LG(fieldSplit, j) _ """"
-			}
-
-			Set base2 = base2 _ ")"
-
-			Set data = ""
-
-			If fName="active" {
-				zw $DATA(@base2)
-				zw $GET(@base2)
-				zw base2
-			}
-			If '$DATA(@base2) {
-				Set data = data _ $lb("type:" _ type)
-			} Else {
-				Set data = $GET(@base2)
-			}
-
-			If bindings '= "" {
-				For i=1:1:$LL(bindings) {
-					Set vs = "vs:" _ $LG(bindings, i)
-					Set:'$LF(data, vs) data = data _ $lb(vs)
-				}
-			}
-
-			If fixedVals '= "" {
-				For i=1:1:$LL(fixedVals) {
-					Set fv = "fv:" _ $LG(fixedVals, i)
-					Set:'$LF(data, fv) data = data _ $lb(fv)
-				}
-			}
-			If fName = "active" {
-				Write "Setting " _ base2 _ ":",!	
-				zw data
-			}
-			Set @base2 = data
-		}
-	}
+	Do ..ParseSnapshot(sd, global, sd.type)
 }
 
 ClassMethod GetValueSets(sd As %DynamicObject)
@@ -121,19 +54,99 @@ ClassMethod GetValueSets(sd As %DynamicObject)
 	Return list
 }
 
-ClassMethod LoadComplexType(sd As %DynamicObject)
+/// Appends a subscript to a global ref
+ClassMethod AppendSubscript(base As %String, subscriptValue) As %String
 {
-	Throw:'$CASE(sd.type, "Extension":1, :0) ##class(%Exception.General).%New("Complex type not handled: " _ sd.type _ ", url: " _ sd.url)
+	Return:subscriptValue="" base
 
-	If ('sd.%IsDefined("differential")) {
-		Throw ##class(%Exception.General).%New("Differential must be defined in extension " _ sd.url)
+	If '$LISTVALID(subscriptValue) {
+		Set subscriptValue = $lb(subscriptValue)
 	}
 
-	Do ..LoadExtension(sd)
+	For i=1:1:$LL(subscriptValue) { 
+		Set base = $NAME(@base@($LG(subscriptValue, i)))
+	}
+
+	Return base
 }
 
-ClassMethod LoadExtension(sd As %DynamicObject)
+ClassMethod ParseSnapshot(sd As %DynamicObject, baseGlobal As %String, elementType As %String)
 {
+	Set els = sd.snapshot.element
+	Throw:els="" ##class(%Exception.General).%New("Snapshot not defined for element type '" _ elementType _ "': " _ sd.url)
+
+	Set baseGlobal = ..AppendSubscript(baseGlobal, elementType)
+	Set baseGlobal = ..AppendSubscript(baseGlobal, sd.url)
+
+	Set iter = els.iterator()
+
+	Set aux = ""
+	While (iter.%GetNext(.key, .val, .type)) {
+
+		Set field = $PIECE(val.path, ".", 2, *)
+
+		Set fieldSet = $lb(field)
+
+		Set choices = ..ExpandChoiceField(field, val.type, .aux)
+
+		Set:(choices'="")&&$LISTVALID(choices) fieldSet = choices
+
+		Set fixedVals = ..GetFixedValues(val)
+		Set bindings = ..GetValueSets(val)
+		#; zw val.path
+		#; zw sd.url
+		#; zw fieldSet
+		#; zw choices
+		#; zw aux
+		For i=1:1:$LL(fieldSet) {
+			Set fNameType = $LG(fieldSet, i)
+			Set fName = $PIECE(fNameType, ":", 1)
+			Set type = $PIECE(fNameType, ":", 2, *)
+
+			Set fieldSplit = $LISTFROMSTRING(fName, ".")
+
+			Set base2 = baseGlobal
+
+			For j=1:1:$LL(fieldSplit) {
+				Set base2 = ..AppendSubscript(base2, $LG(fieldSplit, j))
+			}
+
+			Set data = ""
+
+			If '$DATA(@base2) {
+				Set data = data _ $lb("type:" _ type)
+			} Else {
+				Set data = $GET(@base2)
+			}
+
+			If bindings '= "" {
+				For k=1:1:$LL(bindings) {
+					Set vs = "vs:" _ $LG(bindings, k)
+					Set:'$LF(data, vs) data = data _ $lb(vs)
+				}
+			}
+
+			If fixedVals '= "" {
+				For l=1:1:$LL(fixedVals) {
+					Set fv = "fv:" _ $LG(fixedVals, l)
+					Set:'$LF(data, fv) data = data _ $lb(fv)
+				}
+			}
+
+			Set @base2 = data
+		}
+	}
+}
+
+/// sd: StructureDefinition resource
+/// elementType: Resource, Type, Extension
+ClassMethod ParseDifferential(sd As %DynamicObject, baseGlobal As %String, elementType As %String)
+{
+	Throw:'sd.%IsDefined("differential") ##class(%Exception.General).%New("Differential not defined: " _ sd.url)
+
+	Set baseGlobal = ..AppendSubscript(baseGlobal, elementType)
+	Set baseGlobal = ..AppendSubscript(baseGlobal, sd.url)
+
 	Set els = sd.differential.element
 	Set iter = els.iterator()
 	While (iter.%GetNext(.key, .val, .type)) {
@@ -147,9 +160,32 @@ ClassMethod LoadExtension(sd As %DynamicObject)
 		Set fixedVals = ..GetFixedValues(val)
 		
 		For i=1:1:$LL(fields) {
-			Set ^FHIR.TypeAssist("Extension", sd.url, $LG(fields, i)) = fixedVals
+			Set fName = $PIECE($LG(fields, i), ":", 1)
+			Set type = $PIECE($LG(fields, i), ":", 2, *)
+			Set global = ..AppendSubscript(baseGlobal, fName)
+
+			Set @global = $lb("type:" _ type)
 		}
 	}
+}
+
+ClassMethod LoadComplexType(sd As %DynamicObject)
+{
+	Set global = "^FHIR.TypeAssist"
+	Set global = ..AppendSubscript(global, "Type")
+
+	If (sd.%IsDefined("snapshot")) {
+		Do ..ParseSnapshot(sd, global, sd.type)
+	}
+	#; Throw:'$CASE(sd.type, "Extension":1, :0) ##class(%Exception.General).%New("Complex type not handled: " _ sd.type _ ", url: " _ sd.url)
+
+
+	If ('sd.%IsDefined("differential")) {
+		Throw ##class(%Exception.General).%New("Differential must be defined in extension " _ sd.url)
+	}
+
+	Set global = "^FHIR.TypeAssist"
+	Do ..ParseDifferential(sd, global, "Extension")
 }
 
 ClassMethod GetFixedValues(val As %DynamicObject)
