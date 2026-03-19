@@ -1,23 +1,31 @@
 Class FHIR.TypeAssist.Builder Extends %RegisteredObject
 {
 
-Property types;
+Property Loader As HS.FHIRMeta.Load.NpmLoader;
 
-ClassMethod Load(loader As HS.FHIRMeta.Load.NpmLoader)
+ClassMethod Load(pLoader As HS.FHIRMeta.Load.NpmLoader)
 {
 	Kill ^FHIR.TypeAssist
-	Set iter = loader.getRsrcIterator("StructureDefinition")
+	Return ..%New(pLoader)
+}
+
+Method %OnNew(pLoader As HS.FHIRMeta.Load.NpmLoader) As %Status
+{
+	Set ..Loader = pLoader
+
+	Set iter = pLoader.getRsrcIterator("StructureDefinition")
 
 	While iter.Next(.json) {
 		Set kind = $REPLACE(json.kind, "-", " ")
 		Set kind = $ZCONVERT(kind, "W")
 		Set kind = $REPLACE(kind, " ", "")
 		Try {
-			Do $CLASSMETHOD($THIS, "Load" _ kind, json)
+			Do $METHOD($THIS, "Load" _ kind, json)
 		} Catch ex {
 			/// Todo: This try/catch should be removed once typeassist is completed,
 			/// we do not expect any exceptions to occur
 			If (ex.DisplayString() [ "METHOD DOES NOT EXIST") {
+				w json.%ToJSON()
 				Write kind _ " not supported yet",!
 			} Else {
 				zw json.url
@@ -26,9 +34,21 @@ ClassMethod Load(loader As HS.FHIRMeta.Load.NpmLoader)
 		}
 		
 	}
+
+	Return $$$OK
 }
 
-ClassMethod LoadResource(sd As %DynamicObject)
+Method GetPkgIdForURL(pUrl As %String)
+{
+	Set sql = "SELECT packageId FROM HS_FHIRMeta_Storage.Rsrc where (packageId %INLIST ?) and url = ?"
+	Set tRS = ##class(%SQL.Statement).%ExecDirectNoPrivNoAudit(,sql, ..Loader.packageIdList, pUrl)
+	Do tRS.%Next()
+	Throw:tRS.%SQLCODE'=0 ##class(%Exception.General).%New("Could not find package id for url '" _ pUrl _ "'")
+
+	Return tRS.%Get("packageId")
+}
+
+Method LoadResource(sd As %DynamicObject)
 {
 	Set rType = sd.type
 	Set els = sd.snapshot.element
@@ -40,7 +60,7 @@ ClassMethod LoadResource(sd As %DynamicObject)
 	Do ..ParseSnapshot(sd, global, sd.type)
 }
 
-ClassMethod GetValueSets(sd As %DynamicObject)
+Method GetValueSets(sd As %DynamicObject)
 {
 	Set list = ""
 	If sd.%IsDefined("binding") {
@@ -55,7 +75,7 @@ ClassMethod GetValueSets(sd As %DynamicObject)
 }
 
 /// Appends a subscript to a global ref
-ClassMethod AppendSubscript(base As %String, subscriptValue) As %String
+Method AppendSubscript(base As %String, subscriptValue) As %String
 {
 	Return:subscriptValue="" base
 
@@ -70,13 +90,14 @@ ClassMethod AppendSubscript(base As %String, subscriptValue) As %String
 	Return base
 }
 
-ClassMethod ParseSnapshot(sd As %DynamicObject, baseGlobal As %String, elementType As %String)
+Method ParseSnapshot(sd As %DynamicObject, baseGlobal As %String, elementType As %String)
 {
 	Set els = sd.snapshot.element
 	Throw:els="" ##class(%Exception.General).%New("Snapshot not defined for element type '" _ elementType _ "': " _ sd.url)
 
-	Set baseGlobal = ..AppendSubscript(baseGlobal, elementType)
-	Set baseGlobal = ..AppendSubscript(baseGlobal, sd.url)
+	Set packageId = ..GetPkgIdForURL(sd.url)
+
+	Set baseGlobal = ..AppendSubscript(baseGlobal, $lb(elementType, packageId, sd.url))
 
 	Set iter = els.iterator()
 
@@ -140,12 +161,12 @@ ClassMethod ParseSnapshot(sd As %DynamicObject, baseGlobal As %String, elementTy
 
 /// sd: StructureDefinition resource
 /// elementType: Resource, Type, Extension
-ClassMethod ParseDifferential(sd As %DynamicObject, baseGlobal As %String, elementType As %String)
+Method ParseDifferential(sd As %DynamicObject, baseGlobal As %String, elementType As %String)
 {
 	Throw:'sd.%IsDefined("differential") ##class(%Exception.General).%New("Differential not defined: " _ sd.url)
 
-	Set baseGlobal = ..AppendSubscript(baseGlobal, elementType)
-	Set baseGlobal = ..AppendSubscript(baseGlobal, sd.url)
+	Set packageId = ..GetPkgIdForURL(sd.url)
+	Set baseGlobal = ..AppendSubscript(baseGlobal, $lb(elementType, packageId, sd.url))
 
 	Set els = sd.differential.element
 	Set iter = els.iterator()
@@ -169,7 +190,7 @@ ClassMethod ParseDifferential(sd As %DynamicObject, baseGlobal As %String, eleme
 	}
 }
 
-ClassMethod LoadComplexType(sd As %DynamicObject)
+Method LoadComplexType(sd As %DynamicObject)
 {
 	Set global = "^FHIR.TypeAssist"
 	Set global = ..AppendSubscript(global, "Type")
@@ -177,18 +198,19 @@ ClassMethod LoadComplexType(sd As %DynamicObject)
 	If (sd.%IsDefined("snapshot")) {
 		Do ..ParseSnapshot(sd, global, sd.type)
 	}
-	#; Throw:'$CASE(sd.type, "Extension":1, :0) ##class(%Exception.General).%New("Complex type not handled: " _ sd.type _ ", url: " _ sd.url)
 
-
-	If ('sd.%IsDefined("differential")) {
-		Throw ##class(%Exception.General).%New("Differential must be defined in extension " _ sd.url)
+	If (sd.%IsDefined("differential")) {
+		Do ..ParseDifferential(sd, global, sd.type)
 	}
-
-	Set global = "^FHIR.TypeAssist"
-	Do ..ParseDifferential(sd, global, "Extension")
 }
 
-ClassMethod GetFixedValues(val As %DynamicObject)
+Method LoadPrimitiveType(sd As %DynamicObject)
+{
+	/// Treat primitive type as a complex type
+	Do ..LoadComplexType(sd)
+}
+
+Method GetFixedValues(val As %DynamicObject)
 {
 	Set objIter = val.iterator()
 
@@ -202,7 +224,7 @@ ClassMethod GetFixedValues(val As %DynamicObject)
 	Return fixedVals
 }
 
-ClassMethod ExpandChoiceField(pFieldName, pTypes, aux = "") As %List
+Method ExpandChoiceField(pFieldName, pTypes, aux = "") As %List
 {
 	Return:pTypes="" ""
 
