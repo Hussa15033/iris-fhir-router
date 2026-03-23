@@ -66,6 +66,7 @@ ClassMethod Test(pDebug = 0, pTestNumber = "")
 	Set ^AFPTestsSuccess = 0
 	Set ^AFPTestNumber = pTestNumber
 	Set ^AFPDEBUG = pDebug
+	Set startTime = $ZHOROLOG
 	Do ..RunOneTest(1, "Patient.", "name.")
 	Do ..RunOneTest(2, "Patient.", "telecom.")
 	Do ..RunOneTest(3, "Patient.na", "name.")
@@ -170,6 +171,7 @@ ClassMethod Test(pDebug = 0, pTestNumber = "")
 	
 	Set percentPassed = $NUMBER((^AFPTestsSuccess / ^AFPTests) * 100, 1)
 	Write !,"Tests passed: " _ ^AFPTestsSuccess _ " / " _ ^AFPTests _ "(" _ percentPassed _ "%)",!
+	Write "Time taken for tests to run: " _ ($ZHOROLOG - startTime) _ " seconds"
 }
 
 }
