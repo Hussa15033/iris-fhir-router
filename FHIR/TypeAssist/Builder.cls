@@ -116,9 +116,9 @@ Method ParseElementDefinitions(baseGlobal As %String, els As %DynamicArray) [ Pr
 		For i=1:1:$LL(fieldSet) {
 			Set fNameType = $LG(fieldSet, i)
 
-			Set fName = $PIECE(fNameType, ":", 1)
-			Set type = $PIECE(fNameType, ":", 2)
-			Set profiles = $PIECE(fNameType, ":", 3, *)
+			Set fName = $PIECE(fNameType, "~", 1)
+			Set type = $PIECE(fNameType, "~", 2)
+			Set profiles = $PIECE(fNameType, "~", 3, *)
 			Set profileList = $LISTFROMSTRING(profiles, "~")
 
 			Set fieldSplit = $LISTFROMSTRING(fName, ".")
@@ -263,16 +263,16 @@ Method ExpandChoiceField(pFieldName As %String, pTypes As %DynamicArray, aux = "
 			Set upperCaseType = $ZCVT($EXTRACT(code, 1, 1), "U") _ $EXTRACT(code, 2, *)
 			Set fieldName = $REPLACE(pFieldName, "[x]", upperCaseType)
 			
-			Set profiles = ":" _ $LISTTOSTRING(profiles)
-			Set list = list _ $lb(fieldName _ ":" _ code _ profiles)
+			Set profiles = "~" _ $LISTTOSTRING(profiles)
+			Set list = list _ $lb(fieldName _ "~" _ code _ profiles)
 		}
 	}
 
 	/// Add the original field, default case where the field is not a choice field
 	Set fName = $REPLACE(pFieldName, "[x]", "")
 	Set profileListSuffix = ""
-	Set:profileList'="" profileListSuffix = ":" _ $LISTTOSTRING(profileList, "~")
-	Set list = $lb(fName _ ":" _ $LISTTOSTRING(codeList) _ profileListSuffix) _ list
+	Set:profileList'="" profileListSuffix = "~" _ $LISTTOSTRING(profileList, "~")
+	Set list = $lb(fName _ "~" _ $LISTTOSTRING(codeList) _ profileListSuffix) _ list
 
 	Return list
 }
