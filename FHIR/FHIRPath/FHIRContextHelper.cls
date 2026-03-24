@@ -298,6 +298,7 @@ Method FindPropertyFromRef(pGlobalRef As %String, pName As %String) As %String
 Method IsCollectionField(pGlobalRef As %String) As %Boolean
 {
 	Set maxCardinality = ..FindPropertyFromRef(pGlobalRef, "max")
+	Set:$LL(maxCardinality)=1 maxCardinality = $LG(maxCardinality, 1)
 
 	Return:(maxCardinality '= "")&&((maxCardinality="*")||(maxCardinality>1)) 1
 
