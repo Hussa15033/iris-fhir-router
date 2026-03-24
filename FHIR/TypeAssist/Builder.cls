@@ -55,7 +55,8 @@ Method LoadResource(sd As %DynamicObject)
 	Throw:els="" ##class(%Exception.General).%New("Snapshot not defined for resource " _ rType _ ": " _ sd.url)
 
 	Set global = "^FHIR.TypeAssist"
-	Set global = ..AppendSubscript(global, "Resource")
+	Set packageId = ..GetPkgIdForURL(sd.url)
+	Set global = ..AppendSubscript(global, $lb(packageId, "Resource"))
 
 	Do ..ParseSnapshot(sd, global, sd.type)
 }
@@ -95,9 +96,7 @@ Method ParseSnapshot(sd As %DynamicObject, baseGlobal As %String, elementType As
 	Set els = sd.snapshot.element
 	Throw:els="" ##class(%Exception.General).%New("Snapshot not defined for element type '" _ elementType _ "': " _ sd.url)
 
-	Set packageId = ..GetPkgIdForURL(sd.url)
-
-	Set baseGlobal = ..AppendSubscript(baseGlobal, $lb(elementType, packageId, sd.url))
+	Set baseGlobal = ..AppendSubscript(baseGlobal, $lb(elementType, sd.url))
 
 	Set iter = els.iterator()
 
@@ -135,7 +134,7 @@ Method ParseSnapshot(sd As %DynamicObject, baseGlobal As %String, elementType As
 			Set data = ""
 
 			If '$DATA(@base2) {
-				Set data = data _ $lb("type:" _ type)
+				Set data = data _ $lb("type:" _ type, "min:" _ val.min, "max:" _ val.max)
 			} Else {
 				Set data = $GET(@base2)
 			}
@@ -165,8 +164,7 @@ Method ParseDifferential(sd As %DynamicObject, baseGlobal As %String, elementTyp
 {
 	Throw:'sd.%IsDefined("differential") ##class(%Exception.General).%New("Differential not defined: " _ sd.url)
 
-	Set packageId = ..GetPkgIdForURL(sd.url)
-	Set baseGlobal = ..AppendSubscript(baseGlobal, $lb(elementType, packageId, sd.url))
+	Set baseGlobal = ..AppendSubscript(baseGlobal, $lb(elementType, sd.url))
 
 	Set els = sd.differential.element
 	Set iter = els.iterator()
@@ -185,7 +183,7 @@ Method ParseDifferential(sd As %DynamicObject, baseGlobal As %String, elementTyp
 			Set type = $PIECE($LG(fields, i), ":", 2, *)
 			Set global = ..AppendSubscript(baseGlobal, fName)
 
-			Set @global = $lb("type:" _ type)
+			Set @global = $lb("type:" _ type, "min:" _ val.min, "max:" _ val.max)
 		}
 	}
 }
@@ -193,7 +191,8 @@ Method ParseDifferential(sd As %DynamicObject, baseGlobal As %String, elementTyp
 Method LoadComplexType(sd As %DynamicObject)
 {
 	Set global = "^FHIR.TypeAssist"
-	Set global = ..AppendSubscript(global, "Type")
+	Set packageId = ..GetPkgIdForURL(sd.url)
+	Set global = ..AppendSubscript(global, $lb(packageId, "Type"))
 
 	If (sd.%IsDefined("snapshot")) {
 		Do ..ParseSnapshot(sd, global, sd.type)
@@ -224,7 +223,7 @@ Method GetFixedValues(val As %DynamicObject)
 	Return fixedVals
 }
 
-Method ExpandChoiceField(pFieldName, pTypes, aux = "") As %List
+Method ExpandChoiceField(pFieldName As %String, pTypes As %DynamicArray, aux = "") As %List
 {
 	Return:pTypes="" ""
 
@@ -237,15 +236,24 @@ Method ExpandChoiceField(pFieldName, pTypes, aux = "") As %List
 	Set aux(pFieldName) = pTypes
 	/// Loop through the data types
 	Set typeIter = pTypes.iterator()
+	Set codeList = ""
 	While (typeIter.%GetNext(.k1, .type)) {
-		Set code = type.code
+		Set codeList = codeList _ $lb(type.code)
 
-		/// The value replacing [x] is camel case of the type of the property
-		Set upperCaseType = $ZCVT($EXTRACT(code, 1, 1), "U") _ $EXTRACT(code, 2, *)
-		Set fieldName = $REPLACE(pFieldName, "[x]", upperCaseType)
-		
-		Set list = list _ $lb(fieldName _ ":" _ code)
+		If pFieldName [ "[x]" {
+			/// If the field is a choice field (contains [x]), we also add a field for all its
+			/// types
+			/// The value replacing [x] is camel case of the type of the property
+			Set upperCaseType = $ZCVT($EXTRACT(type.code, 1, 1), "U") _ $EXTRACT(type.code, 2, *)
+			Set fieldName = $REPLACE(pFieldName, "[x]", upperCaseType)
+			
+			Set list = list _ $lb(fieldName _ ":" _ type.code)	
+		}
 	}
+
+	/// Add the original field
+	Set fName = $REPLACE(pFieldName, "[x]", "")
+	Set list = $lb(fName _ ":" _ $LISTTOSTRING(codeList)) _ list
 
 	Return list
 }
