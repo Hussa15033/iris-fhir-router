@@ -21,6 +21,8 @@ Class FHIR.FHIRPath.FHIRContextHelper Extends %RegisteredObject
 ///   NOT this class...
 Property Loader As HS.FHIRMeta.Load.NpmLoader;
 
+Property Resource As %String;
+
 /// List of packages to support....
 Property PackageList As list Of %String;
 
@@ -47,10 +49,34 @@ Property OverrideFields As %ListOfDataTypes;
 
 Property Function As %String;
 
-Method %OnNew(pLoader As HS.FHIRMeta.Load.NpmLoader, pInitialContext = "") As %Status [ Private ]
+Property GlobalRef As %String;
+
+/// Appends a subscript to a global ref
+Method AppendSubscript(base As %String = {..GlobalRef}, subscriptValue) As %String
+{
+	If ('$LISTVALID(subscriptValue))||(subscriptValue = "") {
+		Set subscriptValue = $lb(subscriptValue)
+	}
+
+	For i=1:1:$LL(subscriptValue) { 
+		Set base = $NAME(@base@($LG(subscriptValue, i)))
+	}
+
+	Return base
+}
+
+Method %OnNew(pLoader As HS.FHIRMeta.Load.NpmLoader, pResource = "") As %Status [ Private ]
 {
 	Set ..Loader = pLoader
-	Do ..ResetContext(pInitialContext)
+	Set ..Resource = pResource
+	Set ref = "^FHIR.TypeAssist"
+	Set ref = ..AppendSubscript(ref, $lb($LG(pLoader.packageIdList, 1), "Resource", pResource))
+
+	Set ..GlobalRef = ..DescendSubscript(ref)
+
+	If ($DATA(@..GlobalRef) = 0) {
+		Throw ##class(%Exception.General).%New("Resource '" _ pResource _ "' does not exist in packages")
+	}
 
 	Quit $$$OK
 }
@@ -58,7 +84,8 @@ Method %OnNew(pLoader As HS.FHIRMeta.Load.NpmLoader, pInitialContext = "") As %S
 /// Create a copy context
 Method Duplicate()
 {
-	Set ctx = ##class(FHIRContextHelper).%New(..Loader, ..Context)
+	Set ctx = ##class(FHIRContextHelper).%New(..Loader, ..Resource)
+	Set ctx.GlobalRef = ..GlobalRef
 
 	/// Copy scoped variables
 	Set clonedScope = ..ScopedVariables.%ConstructClone(1, .clonedScope)
@@ -81,9 +108,10 @@ Method ResetContext(pContext = "")
 /// TODO: Change name of this fn or convert all lists in this class to one or the other..
 Method ValidateList(pList = "") As %ListOfDataTypes [ Internal ]
 {
-	Quit:pList="" ""
+	Set newList =  ##class(%ListOfDataTypes).%New()
+	Quit:(pList="")||'$LISTVALID(pList) newList
+	
 	If (pList '= "") && $LISTVALID(pList) {
-		Set newList = ##class(%ListOfDataTypes).%New()
 		For i=1:1:$LL(pList) {
 			Do newList.Insert($LG(pList, i))
 		}
@@ -124,7 +152,7 @@ ClassMethod BuildResourceContext(pLoader As HS.FHIRMeta.Load.NpmLoader, pResourc
 	Set profileUrl = tRS.%Get("url")
 	Set profileVersion = tRS.%Get("version")
 
-	Set ctx = ..%New(pLoader, $lb(profileUrl _ "|" _ profileVersion))
+	Set ctx = ..%New(pLoader, pResource)
 
 	Return ctx
 }
@@ -240,11 +268,40 @@ Method AddFieldDefinition(pFieldName As %String, pDefinition As %DynamicObject, 
 	}
 }
 
-Method IsCollectionField(pFieldName As %String) As %Boolean
+Method IsGlobalRef(pGlobalRef As %String) As %Boolean
 {
-	Set def = ..Definitions.GetAt(pFieldName)
+	Return $EXTRACT(pGlobalRef)="^"
+}
 
-	Return:(def '= "")&&((def.max="*")||(def.max>1)) 1
+Method GetFieldDisplayName(pGlobalRef As %String) As %String
+{
+	Return:'..IsGlobalRef(pGlobalRef) pGlobalRef
+	Return $QS(pGlobalRef, $QL(pGlobalRef))
+}
+
+Method FindProperty(pGlobalRef As %String, pName As %String) As %String
+{
+	Return:'..IsGlobalRef(pGlobalRef) ""
+	Set data = @pGlobalRef
+	For i=1:1:$LL(data) {
+		Set item = $LG(data, i)
+		Continue:item=""
+
+		Set type = $PIECE(item, ":", 1)
+		Set val = $PIECE(item, ":", 2)
+
+		Return:type=pName val
+
+	}
+
+	Return ""
+}
+
+Method IsCollectionField(pGlobalRef As %String) As %Boolean
+{
+	Set maxCardinality = ..FindProperty(pGlobalRef, "max")
+
+	Return:(maxCardinality '= "")&&((maxCardinality="*")||(maxCardinality>1)) 1
 
 	Return 0
 }
@@ -265,6 +322,7 @@ Method TranslateFunctionToSuggestion(pFunctionName As %String) As %String
 
 Method AdvanceFunction(pFunctionName As %String, pIsOp As %Boolean = 0) As %Boolean [ Private ]
 {
+	#; w "Advancing function.. gref="_..GlobalRef,!
 	Set ..Function = pFunctionName
 	Set fnName = $ZCVT(pFunctionName, "L")
 	
@@ -284,23 +342,16 @@ Method AdvanceFunction(pFunctionName As %String, pIsOp As %Boolean = 0) As %Bool
 	} ElseIf (fnName = "as") {
 		/// We want to enumerate the types of all fields
 		/// Loop through all definitions and their snapshot
-		Kill types
-		Set allTypes = ""
-
-		While ..Definitions.GetNext(.k) {
-			#; Write !,"Getting - " _ k
-			Set snapshot = ..Definitions.GetAt(k)
-			Set allTypes = allTypes _ ..GetSnapshotTypes(snapshot, allTypes)
-		}
-
+		Set types = $LISTFROMSTRING(..FindProperty(..GlobalRef, "type"))
+		
 		If 'pIsOp {
-			For i=1:1:$LL(allTypes) {
-				Set $LIST(allTypes, i) = $LG(allTypes, i) _ ")"
+			For i=1:1:$LL(types) {
+				Set $LIST(types, i) = $LG(types, i) _ ")"
 			}
 		}
 
 		Do ..OverrideFields.Clear()
-		Set ..OverrideFields = ..ValidateList(allTypes)
+		Set ..OverrideFields = ..ValidateList(types)
 	} ElseIf (fnName = "oftype") || (fnName = "is") {
 		/// Todo: FHIRPath is case sensitive, make the necessary modifications to ensure all fields
 		/// properties and functions are case sensitive
@@ -348,6 +399,7 @@ Method AdvanceOperator(pOp As %String) As %Boolean
 Method AdvanceContext(pNextField As %String, pIsFunction As %Boolean = 0) As %Boolean
 {
 	#; Write !,"Advancing " _ pNextField _ "..."
+	#; w "gRef = " _ ..GlobalRef,!,!
 	/// Switch the FHIR context helper to the context
 	/// specified by pNextField
 
@@ -359,79 +411,35 @@ Method AdvanceContext(pNextField As %String, pIsFunction As %Boolean = 0) As %Bo
 		Quit $$$ISOK(tSC)
 	}
 
-	Set definition = ..Definitions.GetAt(pNextField)
+	Set ref = ..AppendSubscript(,pNextField)
 
-	If (definition = "") {
-		/// Definition not found (yet..)
-		#; Set tSC = $$$ERROR($$$GeneralError, "Field '" _ pNextField _ "' is not valid within this context")
-		#; $$$ThrowOnError(tSC)
-		Quit 0
+	If ($DATA(@ref) '= 0) {
+		/// This node has data in it
+		Set ..GlobalRef = ref
+		Return 1
+	}
+
+	/// Node doesn't exist if we add data, but may be possible that the type is valid
+	Set typeRef = ..GetTypeRef(..GlobalRef)
+
+	If (typeRef = "") {
+		/// No types found or multiple types found
+		Return 0
+	}
+
+	Set typeRef = ..AppendSubscript(typeRef, pNextField)
+
+	If $DATA(@typeRef) '= 0 {
+		Set ..GlobalRef = typeRef
+		Return 1
 	}
 
 
+	/// No advancements to make to the context, this field
+	/// does not exist as either a direct descendant of the resource field
+	/// or a descendant of its type
 
-	/// Loop through all definitions, as this may be part of a
-	/// sub element of a BackboneElement directly embedded in the resource
-	Set replaceDefinitions = ##class(%ArrayOfObjects).%New()
-	Set key = ""
-	While (..Definitions.GetNext(.key)) {
-		Set props2 = $LISTFROMSTRING(key, ".")
-		If (pNextField = $LISTGET(props2, 1)) {
-			/// This field is hanging
-			Do ..AddFieldDefinition($LG(props2, 2), ..Definitions.GetAt(key), replaceDefinitions)
-		}
-	}
-
-	If replaceDefinitions.Count() > 0 {
-		/// Hanging fields found, replace parent definitions
-		Set ..Definitions = replaceDefinitions
-		Quit 1
-	}
-
-
-	/// Definition exists and is of a particular type
-	Set ..Snapshot = definition
-
-	If definition.type.%Size()=1 {
-		Set nextType = definition.type.%Get(0).code
-		#; Write "Next type found: " _ nextType
-		Set tRS = ##class(%SQL.Statement).%ExecDirect(,"SELECT * FROM HS_FHIRMeta_Storage.Rsrc WHERE coreVersion=? AND %UPPER(id)=? AND resourceType='StructureDefinition'", "4.0.1", $ZCVT(nextType, "U"))
-		Set validField = tRS.%Next()
-		Set tSC = $$$OK
-		Set:(pNextField'="")&&(validField=0) tSC = $$$ERROR($$$GeneralError, "Field '" _ pNextField _ "' is not valid within this context")
-		$$$ThrowOnError(tSC)
-		Quit:validField=0 0
-	} Else {
-		#; Write definition.%ToJSON()
-		#; Throw ##class(%Exception.General).%New("Multiple data types for code found...")
-		/// This field has multiple next types because it is a choice field
-		/// Only keep this field within the current context
-		#; Set nextTypes = ..Fields.GetAt(pNextField)
-		#; Do ..Fields.Clear()
-		#; Do ..Fields.SetAt(nextTypes, pNextField)
-		Quit 1
-	}
-
-
-	Do ..Context.Clear()
-	Do ..Context.Insert(tRS.%Get("url") _ "|" _ tRS.%Get("version"))
-	Do ..OverrideFields.Clear()
-
-	/// Now find any "hanging fields" before loading the new context
-	/// This ensures any hanging fields are included when traversing
-	/// BackBoneElements.
-	Set newDefinitions = ##class(%ArrayOfObjects).%New()
-	While ..Definitions.GetNext(.key) {
-		Set split = $LISTFROMSTRING(key, ".")
-		#; Write "Key = " _ key _ ","_ $LG(split, 1),!
-		If ($LG(split, 1) = pNextField) && ($LL(split) = 2) {
-			Do ..AddFieldDefinition($LG(split, 2), ..Definitions.GetAt(key), .newDefinitions)
-			#; Do newDefinitions.SetAt(..Definitions.GetAt(key), $LG(split, 2))
-		}
-	}
-
-	Do ..LoadContext(newDefinitions)
-	Return 1
+	Return 0
 }
 
 ClassMethod Test()
@@ -452,6 +460,73 @@ ClassMethod Test()
 	Return $$$OK
 }
 
+Method GetTypes(gList As %List) As %List
+{
+	Set list = ""
+	For i=1:1:$LL(gList) {
+		Set item = $LG(gList, i)
+		Continue:item=""
+
+		Set type = $PIECE(item, ":", 1)
+		Set val = $PIECE(item, ":", 2)
+
+		Continue:type'="type"
+
+		Set:val'="" list = list _ $lb(val)
+	}
+
+	Return list
+}
+
+Method GetTypeRef(rootRef As %String) As %String
+{
+	Set list = @rootRef
+	Set typeList = ..GetTypes(list)
+	Return:$LL(typeList)'=1 ""
+
+	Set type = $LG(typeList, 1)
+	Set base = $NAME(@rootRef, 1)
+	Set base = ..AppendSubscript(base, $lb("Type", type))
+
+	Return:'$DATA(@base) ""
+
+	Return ..DescendSubscript(base)
+}
+
+Method DescendSubscript(ref As %String) As %String
+{
+	Set child = $O(@ref@(""))
+	Return ..AppendSubscript(ref, child)
+}
+
+Method ExpandTypeSet(rootRef As %String)
+{
+	Set data = $GET(@rootRef)
+
+	Return:(data="")||'$LISTVALID(data) ""
+	
+	Set types = ..GetTypes(data)
+
+	Set list = ""
+	Set baseTypesRef = $NAME(@rootRef, 1)
+	Set baseTypesRef = ..AppendSubscript(baseTypesRef, "Type")
+	while $LL(types) > 0 {
+		Set type = $LG(types, 1)
+		Set types = $LIST(types, 2, *)
+
+		Set baseRef = ..AppendSubscript(baseTypesRef, type)
+		Write !,"Checking base ref: " _ baseRef
+
+		Continue:$DATA(@baseRef)<=1
+
+		Set nextChild = ..DescendSubscript(baseRef)
+
+		Set child = ""
+	}
+
+	Return list
+}
+
 /// Helper method to convert a type code into
 /// a canonical URL StructureDefinition
 Method ToCanonSD(pDatatype) As %String
@@ -459,19 +534,62 @@ Method ToCanonSD(pDatatype) As %String
 	Return "http://hl7.org/fhir/StructureDefinition/" _ pDatatype _ "|" _ ..Loader.coreVersion
 }
 
+Method FindImmediateDescendants(gRef As %String) As %List
+{
+	Return:(gRef="")||($DATA(@gRef)<=1) ""
+	
+	#; w "Finding desc of " _ gRef
+	Set list = ""
+
+	Set next = ""
+	For {
+		Set subRef = ..AppendSubscript(gRef, next)
+		Set next = $O(@subRef)
+		Quit:next=""
+
+		Set list = list _ $lb(..AppendSubscript(gRef, next))
+	}
+
+	Return list
+}
+
 Method GetPropertyList() As %ListOfDataTypes
 {
+	#; Set nextSubscript = $O(@..AppendSubscript(,""))
+	#; Write nextSubscript
 	If (..OverrideFields.Size > 0) {
 		Return ..OverrideFields
 	}
 
-	Set props = ##class(%ListOfDataTypes).%New()
+	/// Starting at the GlobalRef position, we want to expand and find all descendant fields, as well as
+	/// all types referenced by these fields
+	Set ref = ..GlobalRef
 
-	While ..Definitions.GetNext(.k1) {
-		Set broken = $LISTFROMSTRING(k1, ".")
-		Do:$LL(broken)=1 props.Insert($LG(broken, 1))
+	Set propFields = ..FindImmediateDescendants(ref)
+
+	/// Now find descendants of its type
+	Set propFields = propFields _ ..FindImmediateDescendants(..GetTypeRef(ref))
+
+	For i=1:1:$LL(propFields) {
+		Set type = $LG(propFields, i)
 	}
+	Set props = ..ValidateList(propFields)
 
+	#; Set child = ""
+	#; while $LL(expansionList) > 0 {
+	#; 	Set ref = $LG(expansionList, 1)
+	#; 	Set expansionList = $LIST(expansionList, 2, *)
+		
+	#; 	Set child = $O(@..AppendSubscript(ref, child))
+
+	#; 	If ($DATA(child) = 1) {
+	#; 		Set types = ..GetTypes($GET(child))
+
+
+	#; 	}
+
+	#; 	Do props.Insert(child)
+	#; }
 	For i=1:1:..ScopedVariables.Size {
 		Do props.Insert(..ScopedVariables.GetAt(i))
 	}
@@ -528,7 +646,8 @@ Method GetFunctionsList() As %ListOfDataTypes
 
 	/// Check primitive-type specific functions, only if this snapshot
 	/// can contain a primitive data type
-	Set types = ..GetSnapshotTypes()
+	Set types = ..GetTypes(@..GlobalRef)
+	
 
 	If $LF(types, "string") || $LF(types, "code") {
 		Do fns.Insert(..TranslateFunctionToSuggestion("substring"))
