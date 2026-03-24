@@ -365,8 +365,16 @@ Method AdvanceFunction(pFunctionName As %String, pIsOp As %Boolean = 0) As %Bool
 		#; Write "Modified singleton type to bool"
 	} ElseIf (fnName = "union") {
 		#; W "Doing union...",!
-		/// After resetting context, we add the current resource type to the list of available fields
-		#; Do ..Fields.SetAt(..ResourceContext.type, ..ResourceContext.type)
+		/// The current resource should be a scoped variable, we reset the context to be that of the resource
+		Do ..OverrideFields.Clear()
+		Do ..ScopedVariables.Insert(..Resource)
+
+		/// Reset the context to be the resource's context
+		Set ref = $NAME(@..GlobalRef, 1)
+		Set ref = ..AppendSubscript(ref, "Resource")
+		Set ref = ..AppendSubscript(ref, ..Resource)
+		Set ref = ..DescendSubscript(ref)
+		Set ..GlobalRef = ref
 	}
 
 	#; If $LISTFIND(primitiveFunctions, fnName) {
@@ -656,9 +664,9 @@ Method GetFunctionsList() As %ListOfDataTypes
 		Do fns.Insert(..TranslateFunctionToSuggestion("indexOf"))
 	}
 	
-	#; If $LF(types, "boolean") {
+	If $LF(types, "boolean") {
 		Do fns.Insert(..TranslateFunctionToSuggestion("not"))
-	#; }
+	}
 	
 	If $LF(types, "date") {
 		Throw ##class(%Exception.General).%New("Cannot handle primitive type " _ $LISTTOSTRING(types, ","),"-303444",,"Failed to handle primitive data type '" _ type _ "' for autocomplete")
