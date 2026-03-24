@@ -43,6 +43,8 @@ Method InorderTraversal(pExpr As FHIR.FHIRPath.Expr.Expression, ByRef pCtx As FH
 		If pExpr.Op = "|" {
 			/// If this is the union operator, we want to merge the context resulting from the RHS
 			/// Instantiate a new Context obj
+
+			/// TODO: Review code, unnecessary - can remove whole IF block?
 			Set leftCtx = ##class(FHIR.FHIRPath.FHIRContextHelper).%New(savedContext)
 			Do ..InorderTraversal(pExpr.Right, leftCtx, .finalTokenPrefix, .suggestValues, .refWithinFunctionCall, withinFunctionCall)
 

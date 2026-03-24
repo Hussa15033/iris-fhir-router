@@ -70,11 +70,21 @@ Method %OnNew(pLoader As HS.FHIRMeta.Load.NpmLoader, pResource = "") As %Status 
 	Set ..Loader = pLoader
 	Set ..Resource = pResource
 	Set ref = "^FHIR.TypeAssist"
-	Set ref = ..AppendSubscript(ref, $lb($LG(pLoader.packageIdList, 1), "Resource", pResource))
 
-	Set ..GlobalRef = ..DescendSubscript(ref)
+	/// Check the first package that matches this resource
+	Set packageIdList = pLoader.packageIdList
+	Set ..GlobalRef = ""
+	For i=$LL(packageIdList):-1:1 {
+		Set tempRef = ..AppendSubscript(ref, $lb($LG(packageIdList, i), "Resource", pResource))
+		Set tempRef = ..DescendSubscript(tempRef)
 
-	If ($DATA(@..GlobalRef) = 0) {
+		If $DATA(@tempRef) {
+			Set ..GlobalRef = tempRef
+			Quit
+		}
+	}
+
+	If ..GlobalRef = "" {
 		Throw ##class(%Exception.General).%New("Resource '" _ pResource _ "' does not exist in packages")
 	}
 
@@ -279,27 +289,15 @@ Method GetFieldDisplayName(pGlobalRef As %String) As %String
 	Return $QS(pGlobalRef, $QL(pGlobalRef))
 }
 
-Method FindProperty(pGlobalRef As %String, pName As %String) As %String
+Method FindPropertyFromRef(pGlobalRef As %String, pName As %String) As %String
 {
 	Return:'..IsGlobalRef(pGlobalRef) ""
-	Set data = @pGlobalRef
-	For i=1:1:$LL(data) {
-		Set item = $LG(data, i)
-		Continue:item=""
-
-		Set type = $PIECE(item, ":", 1)
-		Set val = $PIECE(item, ":", 2)
-
-		Return:type=pName val
-
-	}
-
-	Return ""
+	Return ..FindProperty(@pGlobalRef, pName)
 }
 
 Method IsCollectionField(pGlobalRef As %String) As %Boolean
 {
-	Set maxCardinality = ..FindProperty(pGlobalRef, "max")
+	Set maxCardinality = ..FindPropertyFromRef(pGlobalRef, "max")
 
 	Return:(maxCardinality '= "")&&((maxCardinality="*")||(maxCardinality>1)) 1
 
@@ -342,8 +340,11 @@ Method AdvanceFunction(pFunctionName As %String, pIsOp As %Boolean = 0) As %Bool
 	} ElseIf (fnName = "as") {
 		/// We want to enumerate the types of all fields
 		/// Loop through all definitions and their snapshot
-		Set types = $LISTFROMSTRING(..FindProperty(..GlobalRef, "type"))
-		
+
+		/// We first convert to string to combine all comma-separated items, as a list may be defined like
+		/// $lb("type1,type2,type3", "type4", "type5,type6") etc..
+		Set types = $LISTFROMSTRING($LISTTOSTRING(..FindPropertyFromRef(..GlobalRef, "type")))
+
 		If 'pIsOp {
 			For i=1:1:$LL(types) {
 				Set $LIST(types, i) = $LG(types, i) _ ")"
@@ -470,15 +471,20 @@ ClassMethod Test()
 
 Method GetTypes(gList As %List) As %List
 {
+	Return ..FindProperty(gList, "type")
+}
+
+Method FindProperty(gList As %List, propName As %String) As %String
+{
 	Set list = ""
 	For i=1:1:$LL(gList) {
 		Set item = $LG(gList, i)
 		Continue:item=""
 
 		Set type = $PIECE(item, ":", 1)
-		Set val = $PIECE(item, ":", 2)
+		Set val = $PIECE(item, ":", 2, *)
 
-		Continue:type'="type"
+		Continue:type'=propName
 
 		Set:val'="" list = list _ $lb(val)
 	}
@@ -492,11 +498,21 @@ Method GetTypeRef(rootRef As %String) As %String
 	Set typeList = ..GetTypes(list)
 	Return:$LL(typeList)'=1 ""
 
+	Set profileList = ..FindProperty(list, "profile")
+
 	Set type = $LG(typeList, 1)
 	Set base = $NAME(@rootRef, 1)
 	Set base = ..AppendSubscript(base, $lb("Type", type))
 
+	/// TODO: Deal with cases with multiple profile types rather than just the first...
+	If $LL(profileList) > 0 {
+		Set profile = $LG(profileList, 1)
+		Set base2 = ..AppendSubscript(base, profile)
+		Return:$DATA(@base2) base2
+	}
+
 	Return:'$DATA(@base) ""
+
 
 	Return ..DescendSubscript(base)
 }
@@ -689,24 +705,29 @@ Method Lookup(pCanonicalURL, pVersion = "") As HS.FHIRMeta.Storage.Rsrc
 
 Method GetSuggestionsList() As %ListOfDataTypes
 {
-	Set suggestions = ##class(%ListOfDataTypes).%New()
+	Set suggestions = ""
 	/// Look up details of the ValueSets according to the current snapshot
-	If '..Snapshot.%IsDefined("binding") {
-		Return suggestions
+	
+	Set valueSets = ..FindPropertyFromRef(..GlobalRef, "vs")
+	Set fixedValues = ..FindPropertyFromRef(..GlobalRef, "fv")
+
+	Set suggestions = suggestions _ fixedValues
+	
+	For i=1:1:$LL(valueSets) {
+		Set suggestions = suggestions _ ..ExpandValueSet($LG(valueSets, i))
 	}
 
-	Set binding = ..Snapshot.%Get("binding")
+	Return ..ValidateList(suggestions)
+}
 
-	If (binding="") || ('binding.%IsDefined("valueSet")) {
-		Return suggestions
-	}
-
-	Set valueSet = binding.%Get("valueSet")
+Method ExpandValueSet(valueSet As %String)
+{
+	Set suggestions = ""
 
 	/// Rather than following the logic for the $expand operation,
 	/// use the built in expand operation
 	#; Set ..PackageList = $lb("hl7.fhir.r4.core@4.0.1")
-	Set meta = ##class(HS.FHIRMeta.Impl.MetaRsrcInfo).%New($lb("hl7.fhir.r4.core@4.0.1"))
+	Set meta = ##class(HS.FHIRMeta.Impl.MetaRsrcInfo).%New(..Loader.packageIdList)
 	
 	Do meta.ExpandValueSet(valueSet, .codes)
 	// codeSystemAndVersion can be:
@@ -725,7 +746,7 @@ Method GetSuggestionsList() As %ListOfDataTypes
 			Set code = $Order(codes(codeSystemAndVersion, code), 1, display)
 			Quit:code=""
 			
-			Do suggestions.Insert(code)
+			Set suggestions = suggestions _ $lb(code)
 		}
 	}
 
