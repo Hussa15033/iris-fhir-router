@@ -91,13 +91,8 @@ Method AppendSubscript(base As %String, subscriptValue) As %String
 	Return base
 }
 
-Method ParseSnapshot(sd As %DynamicObject, baseGlobal As %String, elementType As %String)
+Method ParseElementDefinitions(baseGlobal As %String, els As %DynamicArray) [ Private ]
 {
-	Set els = sd.snapshot.element
-	Throw:els="" ##class(%Exception.General).%New("Snapshot not defined for element type '" _ elementType _ "': " _ sd.url)
-
-	Set baseGlobal = ..AppendSubscript(baseGlobal, $lb(elementType, sd.url))
-
 	Set iter = els.iterator()
 
 	Set aux = ""
@@ -120,8 +115,11 @@ Method ParseSnapshot(sd As %DynamicObject, baseGlobal As %String, elementType As
 		#; zw aux
 		For i=1:1:$LL(fieldSet) {
 			Set fNameType = $LG(fieldSet, i)
+
 			Set fName = $PIECE(fNameType, ":", 1)
-			Set type = $PIECE(fNameType, ":", 2, *)
+			Set type = $PIECE(fNameType, ":", 2)
+			Set profiles = $PIECE(fNameType, ":", 3, *)
+			Set profileList = $LISTFROMSTRING(profiles, "~")
 
 			Set fieldSplit = $LISTFROMSTRING(fName, ".")
 
@@ -153,9 +151,26 @@ Method ParseSnapshot(sd As %DynamicObject, baseGlobal As %String, elementType As
 				}
 			}
 
+			If $LL(profileList) > 0 {
+				For m=1:1:$LL(profileList) {
+					Set pf = "profile:" _ $LG(profileList, m)
+					Set:'$LF(data, pf) data = data _ $lb(pf)
+				}
+			}
+
 			Set @base2 = data
 		}
 	}
+}
+
+Method ParseSnapshot(sd As %DynamicObject, baseGlobal As %String, elementType As %String)
+{
+	Set els = sd.snapshot.element
+	Throw:els="" ##class(%Exception.General).%New("Snapshot not defined for element type '" _ elementType _ "': " _ sd.url)
+
+	Set baseGlobal = ..AppendSubscript(baseGlobal, $lb(elementType, sd.url))
+
+	Do ..ParseElementDefinitions(baseGlobal, els)
 }
 
 /// sd: StructureDefinition resource
@@ -166,26 +181,7 @@ Method ParseDifferential(sd As %DynamicObject, baseGlobal As %String, elementTyp
 
 	Set baseGlobal = ..AppendSubscript(baseGlobal, $lb(elementType, sd.url))
 
-	Set els = sd.differential.element
-	Set iter = els.iterator()
-	While (iter.%GetNext(.key, .val, .type)) {
-		Set field = $PIECE(val.path, ".", 2)
-		Continue:(field="extension")||(val.path="Extension")
-
-		Set fields = $lb(field)
-		Set choices = ..ExpandChoiceField(field, val.type)
-		Set:$LISTVALID(choices) fields = choices
-
-		Set fixedVals = ..GetFixedValues(val)
-		
-		For i=1:1:$LL(fields) {
-			Set fName = $PIECE($LG(fields, i), ":", 1)
-			Set type = $PIECE($LG(fields, i), ":", 2, *)
-			Set global = ..AppendSubscript(baseGlobal, fName)
-
-			Set @global = $lb("type:" _ type, "min:" _ val.min, "max:" _ val.max)
-		}
-	}
+	Do ..ParseElementDefinitions(baseGlobal, sd.differential.element)
 }
 
 Method LoadComplexType(sd As %DynamicObject)
@@ -223,6 +219,21 @@ Method GetFixedValues(val As %DynamicObject)
 	Return fixedVals
 }
 
+Method ExtractProfiles(type As %DynamicObject)
+{
+	Set profiles = ""
+	If (type.%IsDefined("profile")) {
+		/// This could be an extension with a defined profile
+		Set profIter = type.profile.iterator()
+
+		While (profIter.%GetNext(.k2, .type2)) {
+			Set profiles = profiles _ $lb(type2)
+		}
+	}
+
+	Return profiles
+}
+
 Method ExpandChoiceField(pFieldName As %String, pTypes As %DynamicArray, aux = "") As %List
 {
 	Return:pTypes="" ""
@@ -237,23 +248,31 @@ Method ExpandChoiceField(pFieldName As %String, pTypes As %DynamicArray, aux = "
 	/// Loop through the data types
 	Set typeIter = pTypes.iterator()
 	Set codeList = ""
+	Set profileList = ""
 	While (typeIter.%GetNext(.k1, .type)) {
-		Set codeList = codeList _ $lb(type.code)
+		Set code = type.code
+		Set codeList = codeList _ $lb(code)
 
+		Set profiles = ..ExtractProfiles(type)
+		Set profileList = profileList _ profiles
+		
 		If pFieldName [ "[x]" {
 			/// If the field is a choice field (contains [x]), we also add a field for all its
 			/// types
 			/// The value replacing [x] is camel case of the type of the property
-			Set upperCaseType = $ZCVT($EXTRACT(type.code, 1, 1), "U") _ $EXTRACT(type.code, 2, *)
+			Set upperCaseType = $ZCVT($EXTRACT(code, 1, 1), "U") _ $EXTRACT(code, 2, *)
 			Set fieldName = $REPLACE(pFieldName, "[x]", upperCaseType)
 			
-			Set list = list _ $lb(fieldName _ ":" _ type.code)	
+			Set profiles = ":" _ $LISTTOSTRING(profiles)
+			Set list = list _ $lb(fieldName _ ":" _ code _ profiles)
 		}
 	}
 
-	/// Add the original field
+	/// Add the original field, default case where the field is not a choice field
 	Set fName = $REPLACE(pFieldName, "[x]", "")
-	Set list = $lb(fName _ ":" _ $LISTTOSTRING(codeList)) _ list
+	Set profileListSuffix = ""
+	Set:profileList'="" profileListSuffix = ":" _ $LISTTOSTRING(profileList, "~")
+	Set list = $lb(fName _ ":" _ $LISTTOSTRING(codeList) _ profileListSuffix) _ list
 
 	Return list
 }
