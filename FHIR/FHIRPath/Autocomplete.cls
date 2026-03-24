@@ -156,10 +156,11 @@ Method Suggest(pExpression As %String) As %ListOfDataTypes
 
 	/// Filter 
 	For i=1:1:propertyList.Size {
-		If ($EXTRACT(propertyList.GetAt(i), 1, $L(lastTokenFilter)) = lastTokenFilter) {
-			Do outputList.Insert(propertyList.GetAt(i) _ suffix)
-			Do:ctx.IsCollectionField(propertyList.GetAt(i)) outputList.Insert(propertyList.GetAt(i) _ "[")
-			Do:propertyList.GetAt(i)="extension" outputList.Insert("extension(")
+		Set propName = ctx.GetFieldDisplayName(propertyList.GetAt(i))
+		If ($EXTRACT(propName, 1, $L(lastTokenFilter)) = lastTokenFilter) {
+			Do outputList.Insert(propName _ suffix)
+			Do:ctx.IsCollectionField(propertyList.GetAt(i)) outputList.Insert(propName _ "[")
+			Do:propName="extension" outputList.Insert("extension(")
 		}
 	}
 
