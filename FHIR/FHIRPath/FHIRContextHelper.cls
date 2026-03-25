@@ -721,37 +721,11 @@ Method GetSuggestionsList() As %ListOfDataTypes
 	Return ..ValidateList(suggestions)
 }
 
-Method ExpandValueSet(valueSet As %String)
+Method ExpandValueSet(valueSetURL As %String)
 {
 	Set suggestions = ""
-
-	/// Rather than following the logic for the $expand operation,
-	/// use the built in expand operation
-	#; Set ..PackageList = $lb("hl7.fhir.r4.core@4.0.1")
-	Set meta = ##class(HS.FHIRMeta.Impl.MetaRsrcInfo).%New(..Loader.packageIdList)
 	
-	Do meta.ExpandValueSet(valueSet, .codes)
-	// codeSystemAndVersion can be:
-	// - CodeSystemUri|CodeSystemVersion, when the ValueSet specified a version.
-	// - CodeSystemUri only, when the ValueSet did not specify a version.
-	Set codeSystemAndVersion = ""
-	
-	For {
-		Set codeSystemAndVersion = $Order(codes(codeSystemAndVersion))
-		Quit:codeSystemAndVersion=""
-
-		Set codeSystemUri = $Piece(codeSystemAndVersion, "|", 1)
-		Set codeSystemVersion = $Piece(codeSystemAndVersion, "|", 2)
-		Set code = ""
-		For {
-			Set code = $Order(codes(codeSystemAndVersion, code), 1, display)
-			Quit:code=""
-			
-			Set suggestions = suggestions _ $lb(code)
-		}
-	}
-
-	Return suggestions
+	Return $GET(^FHIR.TypeAssist("ValueSet", valueSetURL))
 }
 
 }

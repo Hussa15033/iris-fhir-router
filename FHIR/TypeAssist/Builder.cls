@@ -1,3 +1,7 @@
+/// This class caches all the type assistance needed by the FHIR Message Router
+/// 
+/// @author Auwais Hussain (ahussain@intersystems.com
+/// @version 25.03.2026
 Class FHIR.TypeAssist.Builder Extends %RegisteredObject
 {
 
@@ -12,7 +16,7 @@ ClassMethod Load(pLoader As HS.FHIRMeta.Load.NpmLoader)
 Method %OnNew(pLoader As HS.FHIRMeta.Load.NpmLoader) As %Status
 {
 	Set ..Loader = pLoader
-
+	
 	Set iter = pLoader.getRsrcIterator("StructureDefinition")
 
 	While iter.Next(.json) {
@@ -35,7 +39,36 @@ Method %OnNew(pLoader As HS.FHIRMeta.Load.NpmLoader) As %Status
 		
 	}
 
+	/// Now traverse and update all ValueSets
+	Do ..LoadValueSets()
+
 	Return $$$OK
+}
+
+Method LoadValueSets()
+{
+	/// Rather than following the logic for the $expand operation,
+	/// use the built in expand operation
+	Set vsLoader = ##class(HS.FHIRMeta.Load.ValueSets).%New(..Loader)
+
+	Set vIter = ..Loader.getRsrcIterator("ValueSet")
+
+
+	While (vIter.Next(.json)) {
+		Kill code,codeList,codes
+		Do vsLoader.getValueSetCodes(json.url, .codes)
+
+		Set code = ""
+		Set codeList = ""
+		For {
+			Set code = $O(codes(code))
+			Quit:code=""
+			Set codeList = codeList _ $lb(code)
+		}
+
+		Set gRef = ..AppendSubscript("^FHIR.TypeAssist", $lb("ValueSet", json.url))
+		Set @gRef = codeList
+	}
 }
 
 Method GetPkgIdForURL(pUrl As %String)
