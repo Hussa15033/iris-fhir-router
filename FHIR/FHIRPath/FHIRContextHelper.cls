@@ -521,6 +521,7 @@ Method GetTypeRef(rootRef As %String) As %String
 Method DescendSubscript(ref As %String) As %String
 {
 	Set child = $O(@ref@(""))
+	Return:child="" child
 	Return ..AppendSubscript(ref, child)
 }
 
@@ -724,8 +725,21 @@ Method GetSuggestionsList() As %ListOfDataTypes
 Method ExpandValueSet(valueSetURL As %String)
 {
 	Set suggestions = ""
-	
-	Return $GET(^FHIR.TypeAssist("ValueSet", valueSetURL))
+
+	Set url = $PIECE(valueSetURL, "|", 1)
+	Set version = $PIECE(valueSetURL, "|", 2)
+
+	/// If version was passed in, we need an exact match
+	Return:version'="" $GET(^FHIR.TypeAssist("ValueSet", url, version))
+
+	/// If version was not passed in, we can get away with returning the first node (if it exists)
+	Set gRef = ..DescendSubscript(..AppendSubscript("^FHIR.TypeAssist", $lb("ValueSet", url)))
+
+	If (gRef = "") {
+		Return ""
+	} Else {
+		Return $GET(@gRef)
+	}
 }
 
 }

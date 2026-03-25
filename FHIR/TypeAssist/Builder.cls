@@ -66,7 +66,7 @@ Method LoadValueSets()
 			Set codeList = codeList _ $lb(code)
 		}
 
-		Set gRef = ..AppendSubscript("^FHIR.TypeAssist", $lb("ValueSet", json.url))
+		Set gRef = ..AppendSubscript("^FHIR.TypeAssist", $lb("ValueSet", json.url, json.version))
 		Set @gRef = codeList
 	}
 }
