@@ -186,6 +186,13 @@ ClassMethod Test(pDebug = 0, pTestNumber = "")
 	Do ..RunOneTest(114, "Observation.component.where(value.as(Quantity) > 30 'mg' ", "!<=")
 	Do ..RunOneTest(115, "Observation.component.where(value.as(Quantity) > 30 'mg' ", "!>=")
 	Do ..RunOneTest(116, "Observation.component.where((value.as(Quantity) > 30 'mg') and ", "code")
+	Do ..RunOneTest(117, "Practitioner.name.family | Practi", "Practitioner.")
+	Do ..RunOneTest(118, "Patient.telecom.where(use='mobile' and system=", "'phone'")
+	Do ..RunOneTest(119, "Observation.component.where(value.as(Qua", "Quantity)")
+	Do ..RunOneTest(120, "Observation.component.where(value is Qua", "Quantity")
+	Do ..RunOneTest(121, "Patient.name.where(fa", "family")
+	Do ..RunOneTest(122, "true and fal", "false",, "Patient")
+	Do ..RunOneTest(123, "Patient.telecom.where(use='home' a", "and")
 	
 	
 	Set percentPassed = $NUMBER((^AFPTestsSuccess / ^AFPTests) * 100, 1)
