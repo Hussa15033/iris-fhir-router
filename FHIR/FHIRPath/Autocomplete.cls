@@ -12,6 +12,8 @@ Property ResourceFilter As %String;
 /// The FHIR Loader to load all metadata once
 Property Loader As HS.FHIRMeta.Load.NpmLoader;
 
+Property ContextHelper As FHIR.FHIRPath.FHIRContextHelper;
+
 Method %OnNew(pPackageId = "hl7.fhir.r4.core@4.0.1", pValidResource = "") As %Status
 {
 	Set ..Loader = ##class(HS.FHIRMeta.Load.NpmLoader).Load($lb(pPackageId))
@@ -95,6 +97,138 @@ Method InorderTraversal(pExpr As FHIR.FHIRPath.Expr.Expression, ByRef pCtx As FH
 	Quit
 }
 
+ClassMethod MarkCursor(pNode As FHIR.FHIRPath.Expr.Expression) As %Boolean
+{
+	Set cls = $CLASSNAME(pNode)
+	If cls = "FHIR.FHIRPath.Expr.BinaryExpr" {
+		Set rightNode = ..MarkCursor(pNode.Right)
+		If rightNode {
+			Set pNode.ContainsCursor = 1
+			Return 1
+		}
+
+		Set leftNode = ..MarkCursor(pNode.Left)
+		If leftNode {
+			Set pNode.ContainsCursor = 1
+			Return 1
+		}
+	} ElseIf (cls = "FHIR.FHIRPath.Expr.IdentExpr") || (cls = "FHIR.FHIRPath.Expr.PartialExpr") {
+		Set pNode.ContainsCursor = 1
+		Return 1
+	} ElseIf cls = "FHIR.FHIRPath.Expr.CallExpr" {
+		Set pNode.ContainsCursor = ..MarkCursor(pNode.Args.GetAt(pNode.Args.Size))
+		Return pNode.ContainsCursor
+	} ElseIf cls = "FHIR.FHIRPath.Expr.IndexExpr" {
+		Set pNode.ContainsCursor = ..MarkCursor(pNode.Field)
+		Return pNode.ContainsCursor
+	} ElseIf (cls = "FHIR.FHIRPath.Expr.NumberExpr") || (cls = "FHIR.FHIRPath.Expr.DecimalExpr") || (cls = "FHIR.FHIRPath.Expr.StringExpr") {
+		Set pNode.ContainsCursor = 1
+		Return 1
+	} ElseIf cls = "FHIR.FHIRPath.Expr.UnaryExpr" { 
+		Set pNode.ContainsCursor = ..MarkCursor(pNode.Expr)
+		Return pNode.ContainsCursor
+	} Else {
+		Throw ##class(%Exception.General).%New("Unable to handle class " _cls)
+	}
+
+	Return 0
+}
+
+Method InferFunctionScope(pFnName As %String, pScope As FHIR.FHIRPath.Context.Scope) As FHIR.FHIRPath.Context.Scope
+{
+	Set scopeVariables = $CASE(pFnName, "where":$lb("$this"), :"")
+	Set pScope.ScopedVariables = scopeVariables
+	Return pScope
+}
+
+/// Note: We assume left side will never contain cursor
+Method InferType(pNode As FHIR.FHIRPath.Expr.Expression, pScope As FHIR.FHIRPath.Context.Scope) As FHIR.FHIRPath.Context.Scope
+{
+	/// Infer the type of the current node based on the context and the type of expression
+	Set cls = $CLASSNAME(pNode)
+	Set package = $PIECE(cls, ".", 1, *-1)
+	Set name = $PIECE(cls, ".", *)
+
+	If package '= "FHIR.FHIRPath.Expr" {
+		Throw ##class(%Exception.General).%New("Unable to handle package " _ package)
+	}
+
+	Set pScope = pScope.Duplicate()
+
+	If name = "BinaryExpr" {
+		/// We traverse down the left to get the type of the left side
+		/// We pass the scope down to the left side, which will update the scope based on the type of the left side expression
+		Set leftScope = ..InferType(pNode.Left, pScope)
+		If pNode.Op = "." {
+			w "Now here.."
+			Set rightScope = ..InferType(pNode.Right, leftScope)
+			Return rightScope
+		} ElseIf ((pNode.Op = "=") || (pNode.Op = "!=")) {
+
+			Set rightScope = ..InferType(pNode.Right, leftScope)
+			If rightScope.DataType = "UNKNOWN" {
+				/// The RHS does not have any data within it
+				Set leftScope.CompletionType = "VALUE"
+				Return leftScope
+			}
+
+			/// If the RHS does have data in it, we assume this BEXP is complete
+			Set newScope = ##class(FHIR.FHIRPath.Context.Scope).%New()
+			Set newScope.CompletionType = "BOOLEAN"
+			Set newScope.DataType = "Boolean"
+
+			Return newScope
+		} Else {
+			/// By default, we pass the initial scope to the RHS tree of the BEXP
+			Set rightScope = ..InferType(pNode.Right, pScope)
+			Return rightScope
+		}
+	} ElseIf name = "CallExpr" {
+		If pNode.Partial {
+			/// If this is a partial call, the user has not typed the ) yet so
+			/// we traverse down the last argument to get the type of the function call expression
+			Set fnScope = ..InferFunctionScope(pNode.Callee.Name, pScope)
+			Set lastArgScope = ..InferType(pNode.Args.GetAt(pNode.Args.Size), fnScope)
+			Return:lastArgScope.DataType'="UNKNOWN" lastArgScope
+			Return pScope
+		} Else {
+			/// If the call is not partial, we can infer the type based on the function definition
+			If pNode.Callee.Name = "where" {
+				/// The where function does not change the scope
+				Return pScope
+			} ElseIf pNode.Callee.Name = "exists" {
+				Set pScope.DataType = "BOOLEAN"
+				Set pScope.FHIRType = "BOOLEAN"
+				Set pScope.CompletionType = "ANY"
+				Set pScope.Cardinality = 1
+				Return pScope
+			} Else {
+				W !,"[NOT IMPLEMENTED]: Unable to handle function " _ pNode.Callee.Name,!
+				Return pScope
+			}
+		}
+	} ElseIf (name = "IdentExpr") {
+		Set finalTokenPrefix = pNode.Name
+		/// This may change the scope...
+		Return ..ContextHelper.CreateScope(pNode.Name, pScope)
+	} ElseIf name = "PartialExpr" {
+		Set scope = ##class(FHIR.FHIRPath.Context.Scope).%New()
+		Set scope.DataType = "UNKNOWN"
+		Return scope
+	} ElseIf name = "IndexExpr" {
+		#; Do ..InorderTraversal(pExpr.Field, .pCtx, .finalTokenPrefix, .suggestValues, .refWithinFunctionCall, withinFunctionCall)
+	}ElseIf (name = "NumberExpr") || (name = "DecimalExpr") {
+	}ElseIf (name = "StringExpr") {
+		#;Do pCtx.AdvanceString()
+	}ElseIf name = "UnaryExpr" { 
+		#; Do ..InorderTraversal(pExpr.Expr, .pCtx, .finalTokenPrefix, .suggestValues, .refWithinFunctionCall, withinFunctionCall)
+	}Else {
+		Throw ##class(%Exception.General).%New("Unable to handle class " _cls)
+	}
+
+	Return pScope
+}
+
 /// Returns a list of resources to search or "" (empty string) if pSearch is a valid resource
 Method SearchResources(pSearch As %String) As %ListOfDataTypes [ Private ]
 {
@@ -134,6 +268,7 @@ Method Suggest(pExpression As %String) As %ListOfDataTypes
 
 	/// Create a context helper
 	Set ctx = ##class(FHIR.FHIRPath.FHIRContextHelper).BuildResourceContext(..Loader, resourceFilter)
+	Set ..ContextHelper = ctx
 	
 	Set ast = ##class(FHIR.FHIRPath.Parser).ParseString(searchString)
 
@@ -141,6 +276,16 @@ Method Suggest(pExpression As %String) As %ListOfDataTypes
 	#; Do ctx.AdvanceContext(..Resource)
 	Set suggestValues = 0
 	Do ..InorderTraversal(ast, .ctx, .lastTokenFilter, .suggestValues, .withinFnCall)
+
+	/// Try to infer the type of the current expression to provide better suggestions
+	Set scope = ##class(FHIR.FHIRPath.Context.Scope).%New()
+	Set scope.Cardinality = 1
+	Set scope.DataType = "RESOURCE"
+	Set scope.FHIRType = resourceFilter
+	Do ..MarkCursor(ast)
+	Set endScope = ..InferType(ast, scope)
+	w !,!,!,"Final scope:",!
+	zw endScope
 	
 	#; Write "LastTokenFilter="_lastTokenFilter,!
 

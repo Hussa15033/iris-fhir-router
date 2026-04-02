@@ -136,6 +136,41 @@ Method ValidateList(pList = "") As %ListOfDataTypes [ Internal ]
 	Return pList
 }
 
+Method CreateScope(pIdent As %String, pInitialScope As FHIR.FHIRPath.Context.Scope) As FHIR.FHIRPath.Context.Scope
+{
+	/// Todo: This should be handled via ClassMethods rather than
+	/// recreating the context helper every time
+	Write "Creating scope for identifier " _ pIdent,!
+	Set scope = ##class(FHIR.FHIRPath.Context.Scope).%New()
+	If pInitialScope.DataType = "RESOURCE" {
+		Set ctx = ..BuildResourceContext(..Loader, pInitialScope.FHIRType)
+		Set successful = ctx.AdvanceContext(pIdent)
+
+		Return:'successful pInitialScope
+		Set scope.DataType = "FHIRTYPE"
+		Set scope.Cardinality = ..FindPropertyFromRef(ctx.GlobalRef, "max")
+		Set scope.FHIRType = ..FindPropertyFromRef(ctx.GlobalRef, "type")
+		Set scope.GlobalRef = ctx.GlobalRef
+		Return scope
+	} ElseIf (pInitialScope.DataType = "FHIRTYPE") {
+		Set typeRef = ..GetTypeRef(pInitialScope.GlobalRef)
+		Set typeRef = ..AppendSubscript(typeRef, pIdent)
+
+		If $DATA(@typeRef) '= 0 {
+			Set scope.GlobalRef = typeRef
+			Set scope.DataType = "FHIRTYPE"
+			Set scope.FHIRType = ..FindPropertyFromRef(typeRef, "type")
+			Set scope.Cardinality = ..FindPropertyFromRef(typeRef, "max")
+			Return scope
+		}
+	} Else {
+		Write !,!,"Currently only resource level scopes are supported, returning empty scope",!
+		Write !,"Scope provided: " _ pInitialScope.DataType
+	}
+
+	Return pInitialScope
+}
+
 /// Merges the context of one context list into this context
 Method MergeContext(pContext)
 {
