@@ -210,7 +210,11 @@ Method InferType(pNode As FHIR.FHIRPath.Expr.Expression, pScope As FHIR.FHIRPath
 		If pNode.Partial {
 			/// If this is a partial call, the user has not typed the ) yet so
 			/// we traverse down the last argument to get the type of the function call expression
+
+			/// TODO: Resetting the prefix token here is a bit of a hack -- ideally we should set the prefix
+			/// token in the correct places in the InferType method rather than resetting it here
 			Set fnScope = ..InferFunctionScope(pNode.Callee.Name, pScope)
+			Set fnScope.PrefixToken = ""
 			Set lastArgScope = ..InferType(pNode.Args.GetAt(pNode.Args.Size), fnScope)
 			Return:lastArgScope.DataType'="UNKNOWN" lastArgScope
 			Return pScope

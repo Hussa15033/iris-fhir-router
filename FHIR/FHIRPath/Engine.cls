@@ -41,6 +41,8 @@ Method AddFunctions(pSuggestions As %ListOfDataTypes) [ Private ]
 	Do pSuggestions.Insert("where(")
 }
 
+/// TODO: The prefix should be used to filter suggestions before returning them,
+/// rather than returning all suggestions and filtering in the caller
 Method Suggest(pScope As FHIR.FHIRPath.Context.Scope) As %ListOfDataTypes
 {
 	/// This type assist engine uses the scope to determine what suggestions to provide
