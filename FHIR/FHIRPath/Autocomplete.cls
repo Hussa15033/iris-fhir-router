@@ -11,6 +11,7 @@ Class FHIR.FHIRPath.Autocomplete Extends %RegisteredObject
 /// FHIR.Autocomplete.Expr - Package containing all expression for AST
 /// FHIR.Autocomplete.TypeAssist.Builder - Loads FHIR metadata and provides methods to access it
 /// FHIR.Autocomplete.Utils - Package/class that helps with utility functions
+/// FHIR.Autocomplete.TypeAssist.InferenceEngine - Inference Engine for working out type
 /// 
 /// Allow registration of FHIRPath functions
 /// - We need to store their:
@@ -159,12 +160,12 @@ Method InferFunctionScope(pFnName As %String, pScope As FHIR.FHIRPath.Context.Sc
 	Set pScopedFunctions = $LISTFROMSTRING("exists,all,where,select,iif,aggregate")
 	If $LF(pScopedFunctions, pFnName) {
 		Set pScope.CompletionType = "TYPE"
-		Set pScope.ScopedVariables = $lb("$this", "$index")
+		Set pScope.ScopedVariables = pScope.ScopedVariables _ $lb("$this", "$index")
 	}
 
 	If (pFnName = "aggregate") {
 		Set pScope.CompletionType = "TYPE"
-		Set pScope.ScopedVariables = $lb("$total", "$this", "$index")
+		Set pScope.ScopedVariables = pScope.ScopedVariables _ $lb("$total", "$this", "$index")
 	} ElseIf (pFnName = "as") {
 		/// Reset scope
 		Set pScope.CompletionType = "LITERALTYPE"

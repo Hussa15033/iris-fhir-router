@@ -51,4 +51,22 @@ Method Reset()
 	Set ..PrefixToken = ""
 }
 
+Method ScopedVariablesSet(pVal) As %Status
+{
+	/// Convert %list to a set
+	If $LISTVALID(pVal) && (pVal '= "") {
+		Set globSet = ""
+		Set i%ScopedVariables = ""
+		For i=1:1:$LL(pVal) {
+			Set v = $LG(pVal, i)
+			If ('$DATA(globSet(v))) {
+				Set globSet(v) = 1
+				Set i%ScopedVariables = i%ScopedVariables _ $lb(v)
+			}
+		}
+	}
+	
+	Return $$$OK
+}
+
 }
