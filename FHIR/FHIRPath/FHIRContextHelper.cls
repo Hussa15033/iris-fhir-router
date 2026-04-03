@@ -7,6 +7,11 @@
 /// 
 /// @author Auwais Hussain (ahussain@intersystems.com)
 /// 
+/// 
+/// TODO: This class contains 3 implementations of the ContextHelper that has evolved to now use
+/// TypeAssist, a dedicated global for the Routing Engine assist class and an InferType method
+/// to traverse the AST as opposed to a primitive InOrderTraversal. This class therefore needs to be cleaned up
+/// to only support that implementation rather than the 2 implementations that preceded it
 Class FHIR.FHIRPath.FHIRContextHelper Extends %RegisteredObject
 {
 
@@ -136,24 +141,45 @@ Method ValidateList(pList = "") As %ListOfDataTypes [ Internal ]
 	Return pList
 }
 
-Method CreateScope(pIdent As %String, pInitialScope As FHIR.FHIRPath.Context.Scope) As FHIR.FHIRPath.Context.Scope
+Method CreateScope(pIdent As %String, pInitialScope As FHIR.FHIRPath.Context.Scope, ByRef success As %Boolean) As FHIR.FHIRPath.Context.Scope
 {
 	/// Todo: This should be handled via ClassMethods rather than
 	/// recreating the context helper every time
 	Set scope = ##class(FHIR.FHIRPath.Context.Scope).%New()
+	Set success = 0
 	If pInitialScope.DataType = "RESOURCE" {
+		/// TODO: Change this to a proper search of all the resources within this type,
+		/// the BuildResourceContext is a deprecated method for loading full context
 		Set ctx = ..BuildResourceContext(..Loader, pInitialScope.FHIRType)
-		Set successful = ctx.AdvanceContext(pIdent)
+		Set success = ctx.AdvanceContext(pIdent)
 
-		Return:'successful pInitialScope
+		Return:'success pInitialScope
 		Set scope.DataType = "FHIRTYPE"
 		Set scope.Cardinality = ..FindPropertyFromRef(ctx.GlobalRef, "max")
 		Set scope.FHIRType = ..FindPropertyFromRef(ctx.GlobalRef, "type")
 		Set scope.GlobalRef = ctx.GlobalRef
-		Set scope.CompletionType = "TYPE"
+
 		Return scope
 	} ElseIf (pInitialScope.DataType = "FHIRTYPE") {
+
+		/// First check if this is a direct descendant of the current type
+		Set ref = ..AppendSubscript(pInitialScope.GlobalRef, pIdent)
+
+		If ($DATA(@ref) '= 0) {
+			/// This node has data in it, so it is a direct descendant of the current type
+			Set scope.GlobalRef = ref
+			Set scope.DataType = "FHIRTYPE"
+			Set scope.Cardinality = ..FindPropertyFromRef(ref, "max")
+			Set scope.FHIRType = ..FindPropertyFromRef(ref, "type")
+			Set success = 1
+			Return scope
+		}
+ 
+
+		/// If the node doesn't exist as a direct descendant, we check if it exists as a descendant of its type
 		Set typeRef = ..GetTypeRef(pInitialScope.GlobalRef)
+		
+		Return:typeRef="" pInitialScope
 		Set typeRef = ..AppendSubscript(typeRef, pIdent)
 
 		If $DATA(@typeRef) '= 0 {
@@ -162,12 +188,14 @@ Method CreateScope(pIdent As %String, pInitialScope As FHIR.FHIRPath.Context.Sco
 			Set scope.FHIRType = ..FindPropertyFromRef(typeRef, "type")
 			Set scope.Cardinality = ..FindPropertyFromRef(typeRef, "max")
 			Set scope.CompletionType = "TYPE"
+			Set success = 1
 			Return scope
 		}
 	} Else {
 		Write !,!,"Currently only resource level scopes are supported, returning empty scope",!
 		Write !,"Scope provided: " _ pInitialScope.DataType
 	}
+
 
 	Return pInitialScope
 }
@@ -329,6 +357,12 @@ Method FindPropertyFromRef(pGlobalRef As %String, pName As %String) As %String
 {
 	Return:'..IsGlobalRef(pGlobalRef) ""
 	Return ..FindProperty(@pGlobalRef, pName)
+}
+
+Method FindCardinalityFromRef(pGlobalRef As %String) As %String
+{
+	Return:'..IsGlobalRef(pGlobalRef) ""
+	Return $LG(..FindPropertyFromRef(pGlobalRef, "max"), 1)
 }
 
 Method IsCollectionField(pGlobalRef As %String) As %Boolean

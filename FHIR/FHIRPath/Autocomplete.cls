@@ -153,9 +153,17 @@ ClassMethod MarkCursor(pNode As FHIR.FHIRPath.Expr.Expression) As %Boolean
 
 Method InferFunctionScope(pFnName As %String, pScope As FHIR.FHIRPath.Context.Scope) As FHIR.FHIRPath.Context.Scope
 {
-	Set scopeVariables = $CASE(pFnName, "where":$lb("$this"), :"")
-	Set pScope.ScopedVariables = scopeVariables
 	Set pScope.Function = pFnName
+	If (pFnName = "where") {
+		Set pScope.CompletionType = "TYPE"
+		Set pScope.ScopedVariables = $lb("$this", "$index")
+	} ElseIf (pFnName = "aggregate") {
+		Set pScope.CompletionType = "TYPE"
+		Set pScope.ScopedVariables = $lb("$total", "$this", "$index")
+	} ElseIf (pFnName = "as") {
+		/// Reset scope
+		Set pScope.CompletionType = "LITERALTYPE"
+	}
 	Return pScope
 }
 
@@ -179,8 +187,8 @@ Method InferType(pNode As FHIR.FHIRPath.Expr.Expression, pScope As FHIR.FHIRPath
 			Set rightScope = ..InferType(pNode.Right, leftScope)
 			
 			/// Right scope is empty and does not contain any identifier/prefix, so we suggest based on the left scope
-			Set leftScope.CompletionType = "ANY"
 			If (rightScope.DataType = "UNKNOWN") {
+				Set leftScope.CompletionType = "ANY"
 				/// Reset the token prefix set on the left side, as RHS is empty
 				Set leftScope.PrefixToken = ""
 				Return leftScope
@@ -213,9 +221,13 @@ Method InferType(pNode As FHIR.FHIRPath.Expr.Expression, pScope As FHIR.FHIRPath
 
 			/// TODO: Resetting the prefix token here is a bit of a hack -- ideally we should set the prefix
 			/// token in the correct places in the InferType method rather than resetting it here
+
+			#; zw "Passing scope to " _ pNode.Callee.Name _ " with partial call"
+			#; zw pScope
 			Set fnScope = ..InferFunctionScope(pNode.Callee.Name, pScope)
 			Set fnScope.PrefixToken = ""
 			Set lastArgScope = ..InferType(pNode.Args.GetAt(pNode.Args.Size), fnScope)
+
 			Return:lastArgScope.DataType'="UNKNOWN" lastArgScope
 			Return pScope
 		} Else {
@@ -236,9 +248,20 @@ Method InferType(pNode As FHIR.FHIRPath.Expr.Expression, pScope As FHIR.FHIRPath
 		}
 	} ElseIf (name = "IdentExpr") {
 		/// This may change the scope...
-		Set scope = ..ContextHelper.CreateScope(pNode.Name, pScope)
-		Set scope.PrefixToken = pNode.Name
-		Return scope
+		Set scope = ..ContextHelper.CreateScope(pNode.Name,  pScope, .success)
+
+		If (success) {
+			/// If this IdentityExpr successfully advanced the scope, we consume the "PrefixToken" and send back
+			// the updated scope
+			Set scope.PrefixToken = ""
+			Set scope.CompletionType = "ANY"
+			Return scope
+		}
+
+		/// Otherwise update the PrefixToken as this is not a valid token
+		Set pScope.PrefixToken = pNode.Name
+		Set pScope.CompletionType = "ANY"
+		Return pScope
 	} ElseIf name = "PartialExpr" {
 		Set scope = ##class(FHIR.FHIRPath.Context.Scope).%New()
 		Set scope.DataType = "UNKNOWN"
@@ -314,6 +337,7 @@ Method Suggest(pExpression As %String, scope As %RegisteredObject = "") As %List
 
 	Do ..MarkCursor(ast)
 	Set endScope = ..InferType(ast, scope)
+
 	#; w !,!,!,"Final scope:",!
 	#; zw endScope
 	#; Set scope = endScope
@@ -351,7 +375,7 @@ Method Suggest(pExpression As %String, scope As %RegisteredObject = "") As %List
 	Do ..MarkCursor(ast)
 	Set endScope = ..InferType(ast, scope)
 	#; w !,!,!,"Final scope:",!
-	zw endScope
+	#; zw endScope
 	#; Set scope = endScope
 
 	Set assist = ##class(FHIR.TypeAssist.Engine).%New(..Loader)

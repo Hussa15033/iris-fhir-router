@@ -1,9 +1,18 @@
 Class FHIR.FHIRPath.Context.Scope Extends %RegisteredObject
 {
 
-Property DataType As %String(VALUELIST = "RESOURCE,FHIRTYPE,BOOLEAN,STRING,INTEGER,LITERAL,UNKNOWN");
+/// TODO: Use the DataType and CompletionType properties properly,
+/// DataType: Data type of the current item stored
+/// CompletionType: The type of completion suggestions we're looking for (e.g. function, operator, etc.)
+/// 
+/// E.g. the initial data type and completion type for a blank expression is the root context,
+/// 	- DataType: "ANY"
+/// 	- CompletionType: "RESOURCE"
+/// 	- All other vars are null/empty
+/// 
+Property DataType As %String(VALUELIST = "NONE,RESOURCE,FHIRTYPE,BOOLEAN,STRING,INTEGER,LITERAL,UNKNOWN");
 
-Property CompletionType As %String(VALUELIST = "ANY,VALUE,TYPE,FUNCTION,OPERATOR");
+Property CompletionType As %String(VALUELIST = "ANY,VALUE,TYPE,FUNCTION,OPERATOR,RESOURCE,LITERALTYPE");
 
 Property FHIRType As %List;
 
@@ -28,6 +37,18 @@ Method Duplicate()
 	Set dupe.GlobalRef = ..GlobalRef
 	Set dupe.Function = ..Function
 	Return dupe
+}
+
+Method Reset()
+{
+	Set ..DataType = ""
+	Set ..FHIRType = ""
+	Set ..Cardinality = 0
+	Set ..ScopedVariables = ""
+	Set ..CompletionType = ""
+	Set ..GlobalRef = ""
+	Set ..Function = ""
+	Set ..PrefixToken = ""
 }
 
 }

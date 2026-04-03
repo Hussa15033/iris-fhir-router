@@ -64,7 +64,12 @@ Method Suggest(pScope As FHIR.FHIRPath.Context.Scope) As %ListOfDataTypes
 		Set desc = ctxHelper.FindImmediateDescendants(ctxHelper.GlobalRef)
 
 		For i=1:1:$LL(desc) {
+			Set cardinality = ctxHelper.FindCardinalityFromRef($LG(desc, i))
 			Do suggestions.Insert(ctxHelper.GetFieldDisplayName($LG(desc, i)) _ ".")
+
+			If (cardinality = "*") {
+				Do suggestions.Insert(ctxHelper.GetFieldDisplayName($LG(desc, i)) _ "[")
+			}
 		}
 	}
 	If ((pScope.CompletionType = "TYPE") || (pScope.CompletionType = "ANY")) && (pScope.DataType = "FHIRTYPE") {
@@ -83,6 +88,19 @@ Method Suggest(pScope As FHIR.FHIRPath.Context.Scope) As %ListOfDataTypes
 		}
 		For i=1:1:$LL(suggestions2) {
 			Do suggestions.Insert(ctxHelper.GetFieldDisplayName($LG(suggestions2, i)) _ suffix)
+		}
+	}
+
+	If (pScope.CompletionType = "LITERALTYPE") {
+		Set types = pScope.FHIRType
+		Set suffix = ""
+		If (pScope.Function '= "") {
+			Set suffix = ")"
+		}
+
+		Set types = $LISTFROMSTRING($LISTTOSTRING(pScope.FHIRType))
+		For i=1:1:$LL(types) {
+			Do suggestions.Insert($LG(types, i) _ suffix)
 		}
 	}
 	Return suggestions
