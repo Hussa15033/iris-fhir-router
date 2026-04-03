@@ -151,13 +151,18 @@ ClassMethod MarkCursor(pNode As FHIR.FHIRPath.Expr.Expression) As %Boolean
 	Return 0
 }
 
+/// This method infers the scope from within a function. Should only be called if the function is not
+/// yet complete
 Method InferFunctionScope(pFnName As %String, pScope As FHIR.FHIRPath.Context.Scope) As FHIR.FHIRPath.Context.Scope
 {
 	Set pScope.Function = pFnName
-	If (pFnName = "where") {
+	Set pScopedFunctions = $LISTFROMSTRING("exists,all,where,select,iif,aggregate")
+	If $LF(pScopedFunctions, pFnName) {
 		Set pScope.CompletionType = "TYPE"
 		Set pScope.ScopedVariables = $lb("$this", "$index")
-	} ElseIf (pFnName = "aggregate") {
+	}
+
+	If (pFnName = "aggregate") {
 		Set pScope.CompletionType = "TYPE"
 		Set pScope.ScopedVariables = $lb("$total", "$this", "$index")
 	} ElseIf (pFnName = "as") {
@@ -268,7 +273,6 @@ Method InferType(pNode As FHIR.FHIRPath.Expr.Expression, pScope As FHIR.FHIRPath
 
 		/// Otherwise update the PrefixToken as this is not a valid token
 		Set pScope.PrefixToken = pNode.Name
-		Set pScope.CompletionType = "ANY"
 		Return pScope
 	} ElseIf name = "PartialExpr" {
 		Set scope = ##class(FHIR.FHIRPath.Context.Scope).%New()

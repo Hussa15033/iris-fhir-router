@@ -39,6 +39,7 @@ Method AddFunctions(pSuggestions As %ListOfDataTypes) [ Private ]
 	Do pSuggestions.Insert("descendants()")
 
 	Do pSuggestions.Insert("where(")
+	Do pSuggestions.Insert("iif(")
 }
 
 Method AddStringFunctions(pSuggestions As %ListOfDataTypes) [ Private ]
@@ -100,6 +101,8 @@ Method Suggest(pScope As FHIR.FHIRPath.Context.Scope) As %ListOfDataTypes
 			Do suggestions.Insert(ctxHelper.GetFieldDisplayName($LG(suggestions2, i)) _ suffix)
 		}
 
+		Do suggestions.Insert("iif(")
+
 		If $LF(pScope.FHIRType, "string") || $LF(pScope.FHIRType, "code") {
 			Do ..AddStringFunctions(suggestions)
 		}
@@ -116,6 +119,10 @@ Method Suggest(pScope As FHIR.FHIRPath.Context.Scope) As %ListOfDataTypes
 		For i=1:1:$LL(types) {
 			Do suggestions.Insert($LG(types, i) _ suffix)
 		}
+	}
+
+	For i=1:1:$LL(pScope.ScopedVariables) {
+		Do suggestions.Insert($LG(pScope.ScopedVariables, i))
 	}
 	Return suggestions
 }
