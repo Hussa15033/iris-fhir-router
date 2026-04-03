@@ -41,10 +41,20 @@ Method AddFunctions(pSuggestions As %ListOfDataTypes) [ Private ]
 	Do pSuggestions.Insert("where(")
 }
 
+Method AddStringFunctions(pSuggestions As %ListOfDataTypes) [ Private ]
+{
+	Do pSuggestions.Insert("substring(")
+	Do pSuggestions.Insert("startsWith(")
+	Do pSuggestions.Insert("endsWith(")
+	Do pSuggestions.Insert("indexOf(")
+}
+
 /// TODO: The prefix should be used to filter suggestions before returning them,
 /// rather than returning all suggestions and filtering in the caller
 Method Suggest(pScope As FHIR.FHIRPath.Context.Scope) As %ListOfDataTypes
 {
+	/// TODO: Clean up the logic within the function to other helper functions and perhaps using basic
+	/// branches, based on how DataType and CompletionType are used
 	/// This type assist engine uses the scope to determine what suggestions to provide
 	Set suggestions = ##class(%ListOfDataTypes).%New()
 
@@ -88,6 +98,10 @@ Method Suggest(pScope As FHIR.FHIRPath.Context.Scope) As %ListOfDataTypes
 		}
 		For i=1:1:$LL(suggestions2) {
 			Do suggestions.Insert(ctxHelper.GetFieldDisplayName($LG(suggestions2, i)) _ suffix)
+		}
+
+		If $LF(pScope.FHIRType, "string") || $LF(pScope.FHIRType, "code") {
+			Do ..AddStringFunctions(suggestions)
 		}
 	}
 

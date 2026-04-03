@@ -215,6 +215,10 @@ Method InferType(pNode As FHIR.FHIRPath.Expr.Expression, pScope As FHIR.FHIRPath
 			Return rightScope
 		}
 	} ElseIf name = "CallExpr" {
+
+		/// TODO: This logic should not be in multiple branches, we should either use a dedicated class
+		/// for handling various functions or use the InferFunctionScope method with a pPartial parameter
+		/// to indicate whether the function is partial or not
 		If pNode.Partial {
 			/// If this is a partial call, the user has not typed the ) yet so
 			/// we traverse down the last argument to get the type of the function call expression
@@ -241,7 +245,11 @@ Method InferType(pNode As FHIR.FHIRPath.Expr.Expression, pScope As FHIR.FHIRPath
 				Set pScope.CompletionType = "ANY"
 				Set pScope.Cardinality = 1
 				Return pScope
+			} ElseIf (pNode.Callee.Name = "first") {
+				Set pScope.Cardinality = 1
 			} Else {
+				/// TODO: This else statement should be removed, only here for development purposes until
+				/// tests pass
 				W !,"[NOT IMPLEMENTED]: Unable to handle function " _ pNode.Callee.Name,!
 				Return pScope
 			}
@@ -339,7 +347,8 @@ Method Suggest(pExpression As %String, scope As %RegisteredObject = "") As %List
 	Set endScope = ..InferType(ast, scope)
 
 	#; w !,!,!,"Final scope:",!
-	#; zw endScope
+	/// TODO: Remove this line..
+	zw:^AFPDEBUG endScope
 	#; Set scope = endScope
 
 	Set assist = ##class(FHIR.TypeAssist.Engine).%New(..Loader)
