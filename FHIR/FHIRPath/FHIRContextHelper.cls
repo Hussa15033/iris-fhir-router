@@ -143,7 +143,7 @@ Method ValidateList(pList = "") As %ListOfDataTypes [ Internal ]
 
 Method CreateScope(pIdent As %String, pInitialScope As FHIR.FHIRPath.Context.Scope, ByRef success As %Boolean) As FHIR.FHIRPath.Context.Scope
 {
-	/// Todo: This should be handled via ClassMethods rather than
+	/// TODO: This should be handled via ClassMethods rather than
 	/// recreating the context helper every time
 	Set scope = ##class(FHIR.FHIRPath.Context.Scope).%New()
 	Set success = 0
@@ -190,6 +190,32 @@ Method CreateScope(pIdent As %String, pInitialScope As FHIR.FHIRPath.Context.Sco
 			Set scope.CompletionType = "TYPE"
 			Set success = 1
 			Return scope
+		}
+	} ElseIf (pInitialScope.DataType = "") {
+		/// This scope is a blank slate, we are not constricting ourselves to any particular resource/type
+		/// Find the Type/Resource within the TypeAssist global
+		Set base = "^FHIR.TypeAssist"
+		Set corePkg = $LG(..Loader.packageIdList)
+		Set base = ..AppendSubscript(base, corePkg)
+		Set baseType = ..AppendSubscript(base, $lb("Type", pIdent))
+		Set baseResource = ..AppendSubscript(base, $lb("Resource", pIdent))
+		
+		If pIdent '= "" {
+			If ($DATA(@baseResource)) {
+				/// Type is a resource
+				Set scope.Cardinality = 1
+				Set scope.DataType = "RESOURCE"
+				Set scope.FHIRType = pIdent
+				Set scope.GlobalRef = baseResource
+				Return scope
+			} ElseIf ($DATA(@baseType)) {
+				/// Type is a FHIR Type
+				Set scope.Cardinality = 1
+				Set scope.DataType = "FHIRTYPE"
+				Set scope.FHIRType = pIdent
+				Set scope.GlobalRef = baseType
+				Return scope
+			}
 		}
 	} Else {
 		Write !,!,"Currently only resource level scopes are supported, returning empty scope",!

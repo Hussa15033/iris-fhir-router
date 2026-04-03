@@ -12,11 +12,13 @@ Class FHIR.FHIRPath.Context.Scope Extends %RegisteredObject
 /// 
 Property DataType As %String(VALUELIST = "NONE,RESOURCE,FHIRTYPE,BOOLEAN,STRING,INTEGER,LITERAL,UNKNOWN");
 
-Property CompletionType As %String(VALUELIST = "ANY,VALUE,TYPE,FUNCTION,OPERATOR,RESOURCE,LITERALTYPE");
+Property CompletionType As %String(VALUELIST = "ANY,VALUE,TYPE,FUNCTION,OPERATOR,RESOURCE,LITERALTYPE") [ InitialExpression = "ANY" ];
+
+Property CompletionScope As %String(VALUELIST = "ALL,DIRECT,CHILD");
 
 Property FHIRType As %List;
 
-Property Cardinality As %Integer;
+Property Cardinality As %Integer [ InitialExpression = 1 ];
 
 Property ScopedVariables As %List;
 
@@ -36,6 +38,7 @@ Method Duplicate()
 	Set dupe.CompletionType = ..CompletionType
 	Set dupe.GlobalRef = ..GlobalRef
 	Set dupe.Function = ..Function
+	Set dupe.CompletionScope = ..CompletionScope
 	Return dupe
 }
 
@@ -49,6 +52,7 @@ Method Reset()
 	Set ..GlobalRef = ""
 	Set ..Function = ""
 	Set ..PrefixToken = ""
+	Set ..CompletionScope = ""
 }
 
 Method ScopedVariablesSet(pVal) As %Status
@@ -64,6 +68,8 @@ Method ScopedVariablesSet(pVal) As %Status
 				Set i%ScopedVariables = i%ScopedVariables _ $lb(v)
 			}
 		}
+	} ElseIf ('$LISTVALID(pVal)) {
+		Set i%ScopedVariables = $lb(pVal)
 	}
 	
 	Return $$$OK

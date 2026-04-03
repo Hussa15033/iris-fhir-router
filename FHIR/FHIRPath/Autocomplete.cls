@@ -159,16 +159,20 @@ Method InferFunctionScope(pFnName As %String, pScope As FHIR.FHIRPath.Context.Sc
 	Set pScope.Function = pFnName
 	Set pScopedFunctions = $LISTFROMSTRING("exists,all,where,select,iif,aggregate")
 	If $LF(pScopedFunctions, pFnName) {
-		Set pScope.CompletionType = "TYPE"
+		Set pScope.CompletionType = "IDENTIFIER"
 		Set pScope.ScopedVariables = pScope.ScopedVariables _ $lb("$this", "$index")
 	}
 
 	If (pFnName = "aggregate") {
-		Set pScope.CompletionType = "TYPE"
+		Set pScope.CompletionType = "IDENTIFIER"
 		Set pScope.ScopedVariables = pScope.ScopedVariables _ $lb("$total", "$this", "$index")
 	} ElseIf (pFnName = "as") {
 		/// Reset scope
-		Set pScope.CompletionType = "LITERALTYPE"
+		Set pScope.CompletionType = "TYPE"
+		Set pScope.CompletionScope = "DIRECT"
+	} ElseIf (pFnName = "is") || (pFnName = "ofType") {
+		Set pScope.CompletionType = "TYPE"
+		Set pScope.CompletionScope = "ALL"
 	}
 	Return pScope
 }
@@ -242,10 +246,11 @@ Method InferType(pNode As FHIR.FHIRPath.Expr.Expression, pScope As FHIR.FHIRPath
 			Return pScope
 		} Else {
 			/// If the call is not partial, we can infer the type based on the function definition
-			If pNode.Callee.Name = "where" {
-				/// The where function does not change the scope
+			Set unchangedScopeFns = $lb("where","skip","single","first","last","tail")
+			If $LF(unchangedScopeFns, pNode.Callee.Name) {
+				/// These functions do not change the scope
 				Return pScope
-			} ElseIf pNode.Callee.Name = "exists" {
+			} ElseIf (pNode.Callee.Name = "exists") || (pNode.Callee.Name = "not") {
 				Set pScope.DataType = "BOOLEAN"
 				Set pScope.FHIRType = "BOOLEAN"
 				Set pScope.CompletionType = "ANY"
@@ -253,6 +258,13 @@ Method InferType(pNode As FHIR.FHIRPath.Expr.Expression, pScope As FHIR.FHIRPath
 				Return pScope
 			} ElseIf (pNode.Callee.Name = "first") {
 				Set pScope.Cardinality = 1
+			} ElseIf (pNode.Callee.Name = "ofType") {
+				/// Create a new scope to be modified
+				Set freshScope = ##class(FHIR.FHIRPath.Context.Scope).%New()
+				Set scopeOfArg = ..InferType(pNode.Args.GetAt(1), freshScope)
+
+				Set scope = ..ContextHelper.CreateScope(scopeOfArg.PrefixToken, scopeOfArg)
+				Return scope
 			} Else {
 				/// TODO: This else statement should be removed, only here for development purposes until
 				/// tests pass

@@ -34,11 +34,21 @@ Method AddFunctions(pSuggestions As %ListOfDataTypes) [ Private ]
 	Do pSuggestions.Insert("first()")
 	Do pSuggestions.Insert("last()")
 	Do pSuggestions.Insert("tail()")
-	Do pSuggestions.Insert("not()")
 	Do pSuggestions.Insert("resolve()")
 	Do pSuggestions.Insert("descendants()")
+	Do pSuggestions.Insert("single()")
 
 	Do pSuggestions.Insert("where(")
+	Do pSuggestions.Insert("as(")
+	Do pSuggestions.Insert("is(")
+	Do pSuggestions.Insert("ofType(")
+	Do pSuggestions.Insert("skip(")
+	Do pSuggestions.Insert("take(")
+}
+
+Method AddBooleanFunctions(pSuggestions As %ListOfDataTypes) [ Private ]
+{
+	Do pSuggestions.Insert("not()")
 }
 
 Method AddStringFunctions(pSuggestions As %ListOfDataTypes) [ Private ]
@@ -63,6 +73,10 @@ Method Suggest(pScope As FHIR.FHIRPath.Context.Scope) As %ListOfDataTypes
 		Do ..AddBooleanOperators(suggestions)
 	}
 
+	If (pScope.DataType = "BOOLEAN") && (pScope.Cardinality = 1) {
+		Do ..AddBooleanFunctions(suggestions)
+	}
+
 	If (pScope.CompletionType = "FUNCTION") || (pScope.CompletionType = "ANY") {
 		/// If we're looking for functions or operators, we add comparison operators and functions
 		Do ..AddFunctions(suggestions)
@@ -82,7 +96,10 @@ Method Suggest(pScope As FHIR.FHIRPath.Context.Scope) As %ListOfDataTypes
 			}
 		}
 	}
-	If ((pScope.CompletionType = "TYPE") || (pScope.CompletionType = "ANY")) && (pScope.DataType = "FHIRTYPE") {
+
+	/// TODO: Make appropriate use of pScope.CompletionScope below
+
+	If ((pScope.CompletionType = "IDENTIFIER") || (pScope.CompletionType = "ANY")) && (pScope.DataType = "FHIRTYPE") {
 		Set ctxHelper = ##class(FHIR.FHIRPath.FHIRContextHelper).%New(..Loader, "Patient")
 		Set ref = pScope.GlobalRef
 
@@ -107,16 +124,26 @@ Method Suggest(pScope As FHIR.FHIRPath.Context.Scope) As %ListOfDataTypes
 		}
 	}
 
-	If (pScope.CompletionType = "LITERALTYPE") {
-		Set types = pScope.FHIRType
-		Set suffix = ""
-		If (pScope.Function '= "") {
-			Set suffix = ")"
-		}
+	If (pScope.CompletionType = "TYPE") {
+		If (pScope.CompletionScope = "ALL") {
+			/// Todo: FHIRPath is case sensitive, make the necessary modifications to ensure all fields
+			/// properties and functions are case sensitive
+			/// Select all types from SQL
+			Set tRS = ##class(%SQL.Statement).%ExecDirectNoPrivNoAudit(,"SELECT DISTINCT(type) FROM HS_FHIRMeta_Storage.Rsrc WHERE coreVersion=? AND (kind='resource' OR kind='complex-type' OR kind='primitive-type')", ..Loader.coreVersion)
+			While tRS.%Next() {
+				Do suggestions.Insert(tRS.%Get("type"))
+			}
+		} ElseIf (pScope.CompletionScope = "DIRECT") {
+			Set types = pScope.FHIRType
+			Set suffix = ""
+			If (pScope.Function '= "") {
+				Set suffix = ")"
+			}
 
-		Set types = $LISTFROMSTRING($LISTTOSTRING(pScope.FHIRType))
-		For i=1:1:$LL(types) {
-			Do suggestions.Insert($LG(types, i) _ suffix)
+			Set types = $LISTFROMSTRING($LISTTOSTRING(pScope.FHIRType))
+			For i=1:1:$LL(types) {
+				Do suggestions.Insert($LG(types, i) _ suffix)
+			}
 		}
 	}
 

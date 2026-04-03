@@ -207,6 +207,8 @@ ClassMethod Test(pDebug = 0, pTestNumber = "")
 	Do ..RunOneTest(121, "Patient.name.where(fa", "family")
 	Do ..RunOneTest(122, "true and fal", "false",, "Patient")
 	Do ..RunOneTest(123, "Patient.telecom.where(use='home' a", "and")
+	Do ..RunOneTest(124, "Patient.name.si", "single()")
+	
 	
 	
 	Set percentPassed = $NUMBER((^AFPTestsSuccess / ^AFPTests) * 100, 1)
