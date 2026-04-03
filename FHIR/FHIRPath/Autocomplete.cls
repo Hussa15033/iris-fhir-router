@@ -180,7 +180,11 @@ Method InferType(pNode As FHIR.FHIRPath.Expr.Expression, pScope As FHIR.FHIRPath
 			
 			/// Right scope is empty and does not contain any identifier/prefix, so we suggest based on the left scope
 			Set leftScope.CompletionType = "ANY"
-			Return:rightScope.DataType="UNKNOWN" leftScope
+			If (rightScope.DataType = "UNKNOWN") {
+				/// Reset the token prefix set on the left side, as RHS is empty
+				Set leftScope.PrefixToken = ""
+				Return leftScope
+			}
 			Return rightScope
 		} ElseIf ((pNode.Op = "=") || (pNode.Op = "!=")) {
 
@@ -312,7 +316,15 @@ Method Suggest(pExpression As %String, scope As %RegisteredObject = "") As %List
 
 	Set assist = ##class(FHIR.TypeAssist.Engine).%New(..Loader)
 	Set suggestions = assist.Suggest(endScope)
-	Return suggestions
+	Set prefix = endScope.PrefixToken
+
+	For i=1:1:suggestions.Size {
+		Set suggestion = suggestions.GetAt(i)
+		If ($EXTRACT(suggestion, 1, $L(prefix)) = prefix) || (prefix = "") {
+			Do outputList.Insert(suggestion)
+		}
+	}
+	Return outputList
 
 	/// Create a context helper
 	Set ctx = ##class(FHIR.FHIRPath.FHIRContextHelper).BuildResourceContext(..Loader, resourceFilter)
