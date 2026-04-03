@@ -18,6 +18,8 @@ ClassMethod RunOneTest(pI, pSearchTerm, pSuggestion, pPackage = "hl7.fhir.r4.cor
 {
 		Quit:(^AFPTestNumber'="")&&(pI'=^AFPTestNumber) 0
 		Write "Running test " _ pI _ "(" _ pSearchTerm _ ")"
+		
+		Set $ECODE = ""
 		Set ^AFPTests = ^AFPTests + 1
 		/// Run a search term and ensure pSuggestion is in the list of suggestions returned
 		Try {
@@ -40,9 +42,21 @@ ClassMethod RunOneTest(pI, pSearchTerm, pSuggestion, pPackage = "hl7.fhir.r4.cor
 		} Catch ex {
 			W:^AFPDEBUG "Exception occurred"
 			W:^AFPDEBUG ex.DisplayString()
+	
+			If $LF($LISTFROMSTRING($EC), "ZINTERRUPT") {
+				Write !,!,"Tests interrupted"
+				Throw ex
+			}
 			Set found = ""
 			W " - Exception occurred",!
 			Return 0
+		}
+
+		If (^AFPDEBUG) {
+			Write !," Expression: " _ pSearchTerm,!
+			Write "==> Expected suggestion: '" _ pSuggestion _ "'",!
+			Write "==> Package: " _ pPackage,!
+			Write "==> Resource filter: " _ pResourceFilter,!
 		}
 
 		/// If the test is negative 
