@@ -39,7 +39,6 @@ Method AddFunctions(pSuggestions As %ListOfDataTypes) [ Private ]
 	Do pSuggestions.Insert("descendants()")
 
 	Do pSuggestions.Insert("where(")
-	Do pSuggestions.Insert("iif(")
 }
 
 Method AddStringFunctions(pSuggestions As %ListOfDataTypes) [ Private ]
