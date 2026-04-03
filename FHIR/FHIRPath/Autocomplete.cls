@@ -6,7 +6,24 @@
 Class FHIR.FHIRPath.Autocomplete Extends %RegisteredObject
 {
 
+/// TODO: Structure:
+/// FHIR.Autocomplete.Engine - main entry point for autocomplete, contains the Suggest method
+/// FHIR.Autocomplete.Expr - Package containing all expression for AST
+/// FHIR.Autocomplete.TypeAssist.Builder - Loads FHIR metadata and provides methods to access it
+/// FHIR.Autocomplete.Utils - Package/class that helps with utility functions
+/// 
+/// Allow registration of FHIRPath functions
+/// - We need to store their:
+/// 	- OutputCardinality
+/// 	- Name
+/// 	- ScopedVariables (list)
+/// 	- OutputType (or a method that modifies the scope based on the input scope)
 /// The name of a resource or "" (empty string)
+/// 
+/// Signatures:
+/// 	empty() : Boolean
+/// 	exists([criteria : ($this, $index) => Boolean]) : Boolean
+/// 	aggregate(aggregator : ($total, $this, $index) => collection [, init : collection]) : collection
 Property ResourceFilter As %String;
 
 /// The FHIR Loader to load all metadata once
@@ -138,6 +155,7 @@ Method InferFunctionScope(pFnName As %String, pScope As FHIR.FHIRPath.Context.Sc
 {
 	Set scopeVariables = $CASE(pFnName, "where":$lb("$this"), :"")
 	Set pScope.ScopedVariables = scopeVariables
+	Set pScope.Function = pFnName
 	Return pScope
 }
 
@@ -153,15 +171,16 @@ Method InferType(pNode As FHIR.FHIRPath.Expr.Expression, pScope As FHIR.FHIRPath
 		Throw ##class(%Exception.General).%New("Unable to handle package " _ package)
 	}
 
-	Set pScope = pScope.Duplicate()
-
 	If name = "BinaryExpr" {
 		/// We traverse down the left to get the type of the left side
 		/// We pass the scope down to the left side, which will update the scope based on the type of the left side expression
 		Set leftScope = ..InferType(pNode.Left, pScope)
 		If pNode.Op = "." {
-			w "Now here.."
 			Set rightScope = ..InferType(pNode.Right, leftScope)
+			
+			/// Right scope is empty and does not contain any identifier/prefix, so we suggest based on the left scope
+			Set leftScope.CompletionType = "ANY"
+			Return:rightScope.DataType="UNKNOWN" leftScope
 			Return rightScope
 		} ElseIf ((pNode.Op = "=") || (pNode.Op = "!=")) {
 
@@ -174,8 +193,8 @@ Method InferType(pNode As FHIR.FHIRPath.Expr.Expression, pScope As FHIR.FHIRPath
 
 			/// If the RHS does have data in it, we assume this BEXP is complete
 			Set newScope = ##class(FHIR.FHIRPath.Context.Scope).%New()
-			Set newScope.CompletionType = "BOOLEAN"
-			Set newScope.DataType = "Boolean"
+			Set newScope.CompletionType = "OPERATOR"
+			Set newScope.DataType = "BOOLEAN"
 
 			Return newScope
 		} Else {
@@ -208,9 +227,10 @@ Method InferType(pNode As FHIR.FHIRPath.Expr.Expression, pScope As FHIR.FHIRPath
 			}
 		}
 	} ElseIf (name = "IdentExpr") {
-		Set finalTokenPrefix = pNode.Name
 		/// This may change the scope...
-		Return ..ContextHelper.CreateScope(pNode.Name, pScope)
+		Set scope = ..ContextHelper.CreateScope(pNode.Name, pScope)
+		Set scope.PrefixToken = pNode.Name
+		Return scope
 	} ElseIf name = "PartialExpr" {
 		Set scope = ##class(FHIR.FHIRPath.Context.Scope).%New()
 		Set scope.DataType = "UNKNOWN"
@@ -245,7 +265,7 @@ Method SearchResources(pSearch As %String) As %ListOfDataTypes [ Private ]
 	Return output
 }
 
-Method Suggest(pExpression As %String) As %ListOfDataTypes
+Method Suggest(pExpression As %String, scope As %RegisteredObject = "") As %ListOfDataTypes
 {
 	Set outputList = ##class(%ListOfDataTypes).%New()
 
@@ -257,7 +277,6 @@ Method Suggest(pExpression As %String) As %ListOfDataTypes
 	If (resourceFilter = "") {
 		Set resourceSearch = $PIECE(pExpression, ".")
 		Set searchString = $PIECE(pExpression, ".", 2, *)
-
 		
 		Set resourceList = ..SearchResources(resourceSearch)
 
@@ -265,6 +284,35 @@ Method Suggest(pExpression As %String) As %ListOfDataTypes
 
 		Set resourceFilter = resourceSearch
 	}
+
+	Set:resourceFilter'="" searchString = resourceFilter _ "." _ searchString
+
+	Set ctx = ##class(FHIR.FHIRPath.FHIRContextHelper).BuildResourceContext(..Loader, resourceFilter)
+	Set ..ContextHelper = ctx
+	
+	Set ast = ##class(FHIR.FHIRPath.Parser).ParseString(searchString)
+
+	/// We want to start by advancing into the resource itself
+	#; Do ctx.AdvanceContext(..Resource)
+	Set suggestValues = 0
+	Do ..InorderTraversal(ast, .ctx, .lastTokenFilter, .suggestValues, .withinFnCall)
+
+	/// Try to infer the type of the current expression to provide better suggestions
+	Set scope = ##class(FHIR.FHIRPath.Context.Scope).%New()
+	Set scope.Cardinality = 1
+	Set scope.DataType = "RESOURCE"
+	Set scope.CompletionType = "ANY"
+	Set scope.FHIRType = resourceFilter
+
+	Do ..MarkCursor(ast)
+	Set endScope = ..InferType(ast, scope)
+	#; w !,!,!,"Final scope:",!
+	#; zw endScope
+	#; Set scope = endScope
+
+	Set assist = ##class(FHIR.TypeAssist.Engine).%New(..Loader)
+	Set suggestions = assist.Suggest(endScope)
+	Return suggestions
 
 	/// Create a context helper
 	Set ctx = ##class(FHIR.FHIRPath.FHIRContextHelper).BuildResourceContext(..Loader, resourceFilter)
@@ -281,11 +329,18 @@ Method Suggest(pExpression As %String) As %ListOfDataTypes
 	Set scope = ##class(FHIR.FHIRPath.Context.Scope).%New()
 	Set scope.Cardinality = 1
 	Set scope.DataType = "RESOURCE"
+	Set scope.CompletionType = "ANY"
 	Set scope.FHIRType = resourceFilter
+
 	Do ..MarkCursor(ast)
 	Set endScope = ..InferType(ast, scope)
-	w !,!,!,"Final scope:",!
+	#; w !,!,!,"Final scope:",!
 	zw endScope
+	#; Set scope = endScope
+
+	Set assist = ##class(FHIR.TypeAssist.Engine).%New(..Loader)
+	Set suggestions = assist.Suggest(endScope)
+	Return suggestions
 	
 	#; Write "LastTokenFilter="_lastTokenFilter,!
 
@@ -333,10 +388,15 @@ Method Suggest(pExpression As %String) As %ListOfDataTypes
 ClassMethod Test(pExpr)
 {
 	Set a = ##class(FHIR.FHIRPath.Autocomplete).%New()
-	Set l = a.Suggest(pExpr)
+	Set l = a.Suggest(pExpr, .scope)
 	For i=1:1:l.Size {
 		Write l.GetAt(i),!
 	}
+
+	Set engine = ##class(FHIR.TypeAssist.Engine).%New(a.Loader)
+	#; zw engine.Suggest(scope)
+
+	Return scope
 }
 
 }

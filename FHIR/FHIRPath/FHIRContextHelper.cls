@@ -140,7 +140,6 @@ Method CreateScope(pIdent As %String, pInitialScope As FHIR.FHIRPath.Context.Sco
 {
 	/// Todo: This should be handled via ClassMethods rather than
 	/// recreating the context helper every time
-	Write "Creating scope for identifier " _ pIdent,!
 	Set scope = ##class(FHIR.FHIRPath.Context.Scope).%New()
 	If pInitialScope.DataType = "RESOURCE" {
 		Set ctx = ..BuildResourceContext(..Loader, pInitialScope.FHIRType)
@@ -151,6 +150,7 @@ Method CreateScope(pIdent As %String, pInitialScope As FHIR.FHIRPath.Context.Sco
 		Set scope.Cardinality = ..FindPropertyFromRef(ctx.GlobalRef, "max")
 		Set scope.FHIRType = ..FindPropertyFromRef(ctx.GlobalRef, "type")
 		Set scope.GlobalRef = ctx.GlobalRef
+		Set scope.CompletionType = "TYPE"
 		Return scope
 	} ElseIf (pInitialScope.DataType = "FHIRTYPE") {
 		Set typeRef = ..GetTypeRef(pInitialScope.GlobalRef)
@@ -161,6 +161,7 @@ Method CreateScope(pIdent As %String, pInitialScope As FHIR.FHIRPath.Context.Sco
 			Set scope.DataType = "FHIRTYPE"
 			Set scope.FHIRType = ..FindPropertyFromRef(typeRef, "type")
 			Set scope.Cardinality = ..FindPropertyFromRef(typeRef, "max")
+			Set scope.CompletionType = "TYPE"
 			Return scope
 		}
 	} Else {
