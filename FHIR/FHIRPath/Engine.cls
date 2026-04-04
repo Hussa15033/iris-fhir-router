@@ -72,6 +72,7 @@ Method Suggest(pScope As FHIR.FHIRPath.Context.Scope) As %ListOfDataTypes
 	#define CFN						$$$HasCT("FUNCTION")
 	#define CRESOURCE				$$$HasCT("RESOURCE")
 	#define CTYPE					$$$HasCT("TYPE")
+	#define CVAL					$$$HasCT("VALUE")
 	/// TODO: Clean up the logic within the function to other helper functions and perhaps using basic
 	/// branches, based on how DataType and CompletionType are used
 	/// This type assist engine uses the scope to determine what suggestions to provide
@@ -133,6 +134,25 @@ Method Suggest(pScope As FHIR.FHIRPath.Context.Scope) As %ListOfDataTypes
 		}
 	}
 
+	If ($$$CVAL) {
+		/// Create a generic context helper up above.
+		Set ctxHelper = ##class(FHIR.FHIRPath.FHIRContextHelper).%New(..Loader, "Patient")
+
+		/// Look up details of the ValueSets according to the current ref
+		Set valueSets = ctxHelper.FindPropertyFromRef(pScope.GlobalRef, "vs")
+		Set fixedValues = ctxHelper.FindPropertyFromRef(pScope.GlobalRef, "fv")
+		
+		Set suggestions2 = fixedValues
+	
+		For i=1:1:$LL(valueSets) {
+			Set suggestions2 = suggestions2 _ ctxHelper.ExpandValueSet($LG(valueSets, i))
+		}
+
+		For i=1:1:$LL(suggestions2) {
+			Do suggestions.Insert("'" _ $LG(suggestions2, i) _ "'")
+		}
+	}
+
 	If ($$$CANY || $$$CTYPE) {
 		If (pScope.CompletionScope = "ALL") {
 			/// TODO: FHIRPath is case sensitive, make the necessary modifications to ensure all fields
@@ -161,10 +181,13 @@ Method Suggest(pScope As FHIR.FHIRPath.Context.Scope) As %ListOfDataTypes
 		}
 	}
 
-	If ($$$CRESOURCE) {
+	If ($$$CRESOURCE) || ($$$CANY) {
 		Set tRS = ##class(%SQL.Statement).%ExecDirectNoPrivNoAudit(,"SELECT DISTINCT(type) FROM HS_FHIRMeta_Storage.Rsrc WHERE coreVersion=? AND (kind='resource') AND id=type", ..Loader.coreVersion)
+		Set suffix = ""
+		Set:pScope.Function="" suffix = "."
 		While tRS.%Next() {
-			Do suggestions.Insert(tRS.%Get("type") _ ".")
+
+			Do suggestions.Insert(tRS.%Get("type") _ suffix)
 		}
 	}
 

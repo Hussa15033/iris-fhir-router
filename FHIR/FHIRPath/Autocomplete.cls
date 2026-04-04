@@ -187,10 +187,10 @@ Method CreateScope(pIdent As %String, pInitialScope As FHIR.FHIRPath.Context.Sco
 	/// TODO: Messy way of dealing with context and helpers...
 	/// the goal was to ensure an empty context at the beginning, and allowing the engine
 	/// to determine the context based off the first InferType
+
 	If (..ContextHelper '= "") && (pInitialScope.GlobalRef '= "") {
 		Return ..ContextHelper.CreateScope(pIdent, pInitialScope, .success)
 	}
-
 
 	Try {
 		Set ctxHelper = ##class(FHIR.FHIRPath.FHIRContextHelper).BuildResourceContext(..Loader, pIdent)
@@ -199,15 +199,11 @@ Method CreateScope(pIdent As %String, pInitialScope As FHIR.FHIRPath.Context.Sco
 	} Catch ex {
 		/// Were not successful in loading a new resource, which means the resource does not exist
 		/// or it may be a prefix, add the scope to search resources
-		Set pInitialScope = ##class(FHIR.FHIRPath.Context.Scope).%New()
-		Set pInitialScope.CompletionType = "RESOURCE"
-		Set pInitialScope.CompletionScope = "ALL"
-
 		Set success = 0
-
-		Set nScope = pInitialScope
 	}
 
+	/// If we were not successful in creating a scope, send back the original scope
+	Set:'success nScope = pInitialScope
 	Return nScope
 }
 
@@ -227,6 +223,9 @@ Method InferType(pNode As FHIR.FHIRPath.Expr.Expression, pScope As FHIR.FHIRPath
 		/// We traverse down the left to get the type of the left side
 		/// We pass the scope down to the left side, which will update the scope based on the type of the left side expression
 		Set leftScope = ..InferType(pNode.Left, pScope)
+
+		/// Operators that double as functions
+		Set fnOps = $lb("is", "as")
 
 		If pNode.Op = "." {
 			Set rightScope = ..InferType(pNode.Right, leftScope)
@@ -254,6 +253,14 @@ Method InferType(pNode As FHIR.FHIRPath.Expr.Expression, pScope As FHIR.FHIRPath
 			Set newScope.DataType = "BOOLEAN"
 
 			Return newScope
+		} ElseIf $LF(fnOps, pNode.Op) {
+			Set fnScope = ..InferFunctionScope(pNode.Op, leftScope)
+			Set fnScope.PrefixToken = ""
+
+			Set rightScope = ..InferType(pNode.Right, fnScope)
+
+			Return:rightScope'="UNKNOWN" rightScope
+			Return pScope
 		} Else {
 			/// By default, we pass the initial scope to the RHS tree of the BEXP
 			Set rightScope = ..InferType(pNode.Right, pScope)
@@ -321,16 +328,17 @@ Method InferType(pNode As FHIR.FHIRPath.Expr.Expression, pScope As FHIR.FHIRPath
 		Set scope = ..CreateScope(pNode.Name, pScope, .success)
 
 		If (success) {
+
 			/// If this IdentityExpr successfully advanced the scope, we consume the "PrefixToken" and send back
 			// the updated scope
 			Set scope.PrefixToken = ""
 			Set scope.CompletionType = "ANY"
+
 			Return scope
 		}
 
 		/// Otherwise update the PrefixToken as this is not a valid token
 		Set scope.PrefixToken = pNode.Name
-
 		Return scope
 	} ElseIf name = "PartialExpr" {
 		Set scope = ##class(FHIR.FHIRPath.Context.Scope).%New()

@@ -148,7 +148,7 @@ ClassMethod Test(pDebug = 0, pTestNumber = "")
 	Do ..RunOneTest(65, "Observation.component.where(value.OfTy", "")
 	Do ..RunOneTest(66, "Observation.component.where(value.ofTy", "ofType(")
 	Do ..RunOneTest(67, "Observation.component.where(value.as(P", "Period)")
-	Do ..RunOneTest(68, "Observation.component.where(value as Qu", "Quantity")
+	Do ..RunOneTest(68, "Observation.component.where(value as Qu", "Quantity)")
 	Do ..RunOneTest(69, "true or false", "",, "Patient")
 	Do ..RunOneTest(70, "true xor false", "",, "Patient")
 	Do ..RunOneTest(71, "true implies false", "",, "Patient")
@@ -223,6 +223,8 @@ ClassMethod Test(pDebug = 0, pTestNumber = "")
 	Do ..RunOneTest(139, "Practitioner.name.family.union(", "birthDate")
 	Do ..RunOneTest(140, "Practitioner.name.family.union(", "address")
 	Do ..RunOneTest(141, "true and fal", "false")
+	Do ..RunOneTest(142, "Hu", "!HumanName")
+	Do ..RunOneTest(143, "Hu", "!HumanName.")
 
 	
 	
