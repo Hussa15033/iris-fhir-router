@@ -178,6 +178,19 @@ Method InferFunctionScope(pFnName As %String, pScope As FHIR.FHIRPath.Context.Sc
 		Set pScope.CompletionScope = "DIRECT"
 		Set pScope.GlobalRef = pScope.RootRef
 		Set pScope.Cardinality = 1
+	} ElseIf (pFnName = "extension") {
+		/// Simulate the expression of a BEXP and CallExpr
+		Set nextScope = ..CreateScope("extension", pScope, .success)
+		Return:'success pScope
+
+		Set nextScope = ..CreateScope("url", nextScope, .success)
+		Return:'success pScope
+
+		Set nextScope.CompletionType = "VALUE"
+
+		Set pScope = nextScope
+		
+		zw pScope
 	}
 	Return pScope
 }
@@ -286,10 +299,10 @@ Method InferType(pNode As FHIR.FHIRPath.Expr.Expression, pScope As FHIR.FHIRPath
 			Set lastArgScope = ..InferType(pNode.Args.GetAt(pNode.Args.Size), fnScope)
 
 			Return:lastArgScope.DataType'="UNKNOWN" lastArgScope
-			Return pScope
+			Return fnScope
 		} Else {
 			/// If the call is not partial, we can infer the type based on the function definition
-			Set unchangedScopeFns = $lb("where","skip","single","first","last","tail")
+			Set unchangedScopeFns = $lb("where","skip","single","first","last","tail", "extension")
 			If $LF(unchangedScopeFns, pNode.Callee.Name) {
 				/// These functions do not change the scope
 				Return pScope
