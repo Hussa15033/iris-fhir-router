@@ -173,8 +173,42 @@ Method InferFunctionScope(pFnName As %String, pScope As FHIR.FHIRPath.Context.Sc
 	} ElseIf (pFnName = "is") || (pFnName = "ofType") {
 		Set pScope.CompletionType = "TYPE"
 		Set pScope.CompletionScope = "ALL"
+	} ElseIf (pFnName = "union") {
+		Set pScope.CompletionType = "RESOURCE,IDENTIFIER"
+		Set pScope.CompletionScope = "DIRECT"
+		Set pScope.GlobalRef = pScope.RootRef
+		Set pScope.Cardinality = 1
 	}
 	Return pScope
+}
+
+Method CreateScope(pIdent As %String, pInitialScope As FHIR.FHIRPath.Context.Scope, ByRef success As %Boolean) As FHIR.FHIRPath.Context.Scope
+{
+	/// TODO: Messy way of dealing with context and helpers...
+	/// the goal was to ensure an empty context at the beginning, and allowing the engine
+	/// to determine the context based off the first InferType
+	If (..ContextHelper '= "") && (pInitialScope.GlobalRef '= "") {
+		Return ..ContextHelper.CreateScope(pIdent, pInitialScope, .success)
+	}
+
+
+	Try {
+		Set ctxHelper = ##class(FHIR.FHIRPath.FHIRContextHelper).BuildResourceContext(..Loader, pIdent)
+		Set ..ContextHelper = ctxHelper
+		Set nScope = ctxHelper.CreateScope(pIdent, pInitialScope, .success)
+	} Catch ex {
+		/// Were not successful in loading a new resource, which means the resource does not exist
+		/// or it may be a prefix, add the scope to search resources
+		Set pInitialScope = ##class(FHIR.FHIRPath.Context.Scope).%New()
+		Set pInitialScope.CompletionType = "RESOURCE"
+		Set pInitialScope.CompletionScope = "ALL"
+
+		Set success = 0
+
+		Set nScope = pInitialScope
+	}
+
+	Return nScope
 }
 
 /// Note: We assume left side will never contain cursor
@@ -193,6 +227,7 @@ Method InferType(pNode As FHIR.FHIRPath.Expr.Expression, pScope As FHIR.FHIRPath
 		/// We traverse down the left to get the type of the left side
 		/// We pass the scope down to the left side, which will update the scope based on the type of the left side expression
 		Set leftScope = ..InferType(pNode.Left, pScope)
+
 		If pNode.Op = "." {
 			Set rightScope = ..InferType(pNode.Right, leftScope)
 			
@@ -222,6 +257,7 @@ Method InferType(pNode As FHIR.FHIRPath.Expr.Expression, pScope As FHIR.FHIRPath
 		} Else {
 			/// By default, we pass the initial scope to the RHS tree of the BEXP
 			Set rightScope = ..InferType(pNode.Right, pScope)
+
 			Return rightScope
 		}
 	} ElseIf name = "CallExpr" {
@@ -261,9 +297,17 @@ Method InferType(pNode As FHIR.FHIRPath.Expr.Expression, pScope As FHIR.FHIRPath
 			} ElseIf (pNode.Callee.Name = "ofType") {
 				/// Create a new scope to be modified
 				Set freshScope = ##class(FHIR.FHIRPath.Context.Scope).%New()
+				Set scope = ..InferType(pNode.Args.GetAt(1), freshScope)
+
+				Set scope.CompletionType = "ANY"
+				Set scope.CompletionScope = "DIRECT"
+				Return scope
+			} ElseIf (pNode.Callee.Name = "union") {
+				Set freshScope = ##class(FHIR.FHIRPath.Context.Scope).%New()
 				Set scopeOfArg = ..InferType(pNode.Args.GetAt(1), freshScope)
 
-				Set scope = ..ContextHelper.CreateScope(scopeOfArg.PrefixToken, scopeOfArg)
+				/// Now merge the scopes
+				Set scope = pScope.MergeScope(scopeOfArg)
 				Return scope
 			} Else {
 				/// TODO: This else statement should be removed, only here for development purposes until
@@ -274,7 +318,7 @@ Method InferType(pNode As FHIR.FHIRPath.Expr.Expression, pScope As FHIR.FHIRPath
 		}
 	} ElseIf (name = "IdentExpr") {
 		/// This may change the scope...
-		Set scope = ..ContextHelper.CreateScope(pNode.Name,  pScope, .success)
+		Set scope = ..CreateScope(pNode.Name, pScope, .success)
 
 		If (success) {
 			/// If this IdentityExpr successfully advanced the scope, we consume the "PrefixToken" and send back
@@ -285,13 +329,17 @@ Method InferType(pNode As FHIR.FHIRPath.Expr.Expression, pScope As FHIR.FHIRPath
 		}
 
 		/// Otherwise update the PrefixToken as this is not a valid token
-		Set pScope.PrefixToken = pNode.Name
-		Return pScope
+		Set scope.PrefixToken = pNode.Name
+
+		Return scope
 	} ElseIf name = "PartialExpr" {
 		Set scope = ##class(FHIR.FHIRPath.Context.Scope).%New()
 		Set scope.DataType = "UNKNOWN"
 		Return scope
 	} ElseIf name = "IndexExpr" {
+		Set scope = ..InferType(pNode.Field, pScope)
+		Set scope.Cardinality = 1
+		Return scope
 		#; Do ..InorderTraversal(pExpr.Field, .pCtx, .finalTokenPrefix, .suggestValues, .refWithinFunctionCall, withinFunctionCall)
 	}ElseIf (name = "NumberExpr") || (name = "DecimalExpr") {
 	}ElseIf (name = "StringExpr") {
@@ -333,32 +381,40 @@ Method Suggest(pExpression As %String, scope As %RegisteredObject = "") As %List
 	If (resourceFilter = "") {
 		Set resourceSearch = $PIECE(pExpression, ".")
 		Set searchString = $PIECE(pExpression, ".", 2, *)
-		
-		Set resourceList = ..SearchResources(resourceSearch)
 
-		Return:resourceList'="" resourceList
-
-		Set resourceFilter = resourceSearch
+		#; Set resourceFilter = resourceSearch
 	}
 
 	Set:resourceFilter'="" searchString = resourceFilter _ "." _ searchString
 
-	Set ctx = ##class(FHIR.FHIRPath.FHIRContextHelper).BuildResourceContext(..Loader, resourceFilter)
-	Set ..ContextHelper = ctx
+	If (..ResourceFilter '= "") {
+		Set ctx = ##class(FHIR.FHIRPath.FHIRContextHelper).BuildResourceContext(..Loader, resourceFilter)
+		Set ..ContextHelper = ctx
+		Set scope = ##class(FHIR.FHIRPath.Context.Scope).%New()
+		Set scope.Cardinality = 1
+		Set scope.DataType = "RESOURCE"
+		Set scope.CompletionType = "ANY"
+		Set scope.FHIRType = resourceFilter
+		Set scope.RootRef = ctx.GlobalRef
+	} Else {
+		Set scope = ##class(FHIR.FHIRPath.Context.Scope).%New()
+	}
 	
-	Set ast = ##class(FHIR.FHIRPath.Parser).ParseString(searchString)
+	Set ast = ##class(FHIR.FHIRPath.Parser).ParseString(pExpression)
 
 	/// We want to start by advancing into the resource itself
 	#; Do ctx.AdvanceContext(..Resource)
 	Set suggestValues = 0
-	Do ..InorderTraversal(ast, .ctx, .lastTokenFilter, .suggestValues, .withinFnCall)
+	#; Do ..InorderTraversal(ast, .ctx, .lastTokenFilter, .suggestValues, .withinFnCall)
 
 	/// Try to infer the type of the current expression to provide better suggestions
-	Set scope = ##class(FHIR.FHIRPath.Context.Scope).%New()
-	Set scope.Cardinality = 1
-	Set scope.DataType = "RESOURCE"
-	Set scope.CompletionType = "ANY"
-	Set scope.FHIRType = resourceFilter
+	#; Set scope = ..CreateScope()
+	#; Set scope = ##class(FHIR.FHIRPath.Context.Scope).%New()
+	#; Set scope.Cardinality = 1
+	#; Set scope.DataType = "RESOURCE"
+	#; Set scope.CompletionType = "ANY"
+	#; Set scope.FHIRType = resourceFilter
+	#; Set scope.RootRef = ctx.GlobalRef
 
 	Do ..MarkCursor(ast)
 	Set endScope = ..InferType(ast, scope)

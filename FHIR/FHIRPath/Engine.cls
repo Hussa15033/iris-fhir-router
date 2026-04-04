@@ -44,6 +44,7 @@ Method AddFunctions(pSuggestions As %ListOfDataTypes) [ Private ]
 	Do pSuggestions.Insert("ofType(")
 	Do pSuggestions.Insert("skip(")
 	Do pSuggestions.Insert("take(")
+	Do pSuggestions.Insert("union(")
 }
 
 Method AddBooleanFunctions(pSuggestions As %ListOfDataTypes) [ Private ]
@@ -63,12 +64,20 @@ Method AddStringFunctions(pSuggestions As %ListOfDataTypes) [ Private ]
 /// rather than returning all suggestions and filtering in the caller
 Method Suggest(pScope As FHIR.FHIRPath.Context.Scope) As %ListOfDataTypes
 {
+	Set completionTypes = $LISTFROMSTRING(pScope.CompletionType)
+	#define HasCT(%a)				$LF(completionTypes, %a)
+	#define COP						$$$HasCT("OPERATOR")
+	#define CANY					$$$HasCT("ANY")
+	#define CIDENT					$$$HasCT("IDENTIFIER")
+	#define CFN						$$$HasCT("FUNCTION")
+	#define CRESOURCE				$$$HasCT("RESOURCE")
+	#define CTYPE					$$$HasCT("TYPE")
 	/// TODO: Clean up the logic within the function to other helper functions and perhaps using basic
 	/// branches, based on how DataType and CompletionType are used
 	/// This type assist engine uses the scope to determine what suggestions to provide
 	Set suggestions = ##class(%ListOfDataTypes).%New()
 
-	If (pScope.DataType = "BOOLEAN") && (pScope.CompletionType = "OPERATOR") {
+	If (pScope.DataType = "BOOLEAN") && $$$COP {
 		/// If the data type is boolean and we're looking for operators
 		Do ..AddBooleanOperators(suggestions)
 	}
@@ -77,7 +86,7 @@ Method Suggest(pScope As FHIR.FHIRPath.Context.Scope) As %ListOfDataTypes
 		Do ..AddBooleanFunctions(suggestions)
 	}
 
-	If (pScope.CompletionType = "FUNCTION") || (pScope.CompletionType = "ANY") {
+	If (pScope.CompletionType = "FUNCTION") || $$$CANY {
 		/// If we're looking for functions or operators, we add comparison operators and functions
 		Do ..AddFunctions(suggestions)
 	}
@@ -98,8 +107,8 @@ Method Suggest(pScope As FHIR.FHIRPath.Context.Scope) As %ListOfDataTypes
 	}
 
 	/// TODO: Make appropriate use of pScope.CompletionScope below
-
-	If ((pScope.CompletionType = "IDENTIFIER") || (pScope.CompletionType = "ANY")) && (pScope.DataType = "FHIRTYPE") {
+	If (($$$CIDENT) || ($$$CANY)) && (pScope.DataType = "FHIRTYPE") {
+		/// TODO: We don't need a context helper, but only used so we have access to the FindImmediateDescendants function
 		Set ctxHelper = ##class(FHIR.FHIRPath.FHIRContextHelper).%New(..Loader, "Patient")
 		Set ref = pScope.GlobalRef
 
@@ -124,26 +133,38 @@ Method Suggest(pScope As FHIR.FHIRPath.Context.Scope) As %ListOfDataTypes
 		}
 	}
 
-	If (pScope.CompletionType = "TYPE") {
+	If ($$$CANY || $$$CTYPE) {
 		If (pScope.CompletionScope = "ALL") {
-			/// Todo: FHIRPath is case sensitive, make the necessary modifications to ensure all fields
+			/// TODO: FHIRPath is case sensitive, make the necessary modifications to ensure all fields
 			/// properties and functions are case sensitive
 			/// Select all types from SQL
+			/// TODO: Use the FHIR.TypeAssist global for this..
 			Set tRS = ##class(%SQL.Statement).%ExecDirectNoPrivNoAudit(,"SELECT DISTINCT(type) FROM HS_FHIRMeta_Storage.Rsrc WHERE coreVersion=? AND (kind='resource' OR kind='complex-type' OR kind='primitive-type')", ..Loader.coreVersion)
 			While tRS.%Next() {
 				Do suggestions.Insert(tRS.%Get("type"))
 			}
 		} ElseIf (pScope.CompletionScope = "DIRECT") {
 			Set types = pScope.FHIRType
+			If '$LISTVALID(types) {
+				Set types = $lb(types)
+			}
+
 			Set suffix = ""
 			If (pScope.Function '= "") {
 				Set suffix = ")"
 			}
 
-			Set types = $LISTFROMSTRING($LISTTOSTRING(pScope.FHIRType))
+			Set types = $LISTFROMSTRING($LISTTOSTRING(types))
 			For i=1:1:$LL(types) {
 				Do suggestions.Insert($LG(types, i) _ suffix)
 			}
+		}
+	}
+
+	If ($$$CRESOURCE) {
+		Set tRS = ##class(%SQL.Statement).%ExecDirectNoPrivNoAudit(,"SELECT DISTINCT(type) FROM HS_FHIRMeta_Storage.Rsrc WHERE coreVersion=? AND (kind='resource') AND id=type", ..Loader.coreVersion)
+		While tRS.%Next() {
+			Do suggestions.Insert(tRS.%Get("type") _ ".")
 		}
 	}
 

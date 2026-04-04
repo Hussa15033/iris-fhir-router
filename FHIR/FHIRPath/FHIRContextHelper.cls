@@ -145,12 +145,14 @@ Method CreateScope(pIdent As %String, pInitialScope As FHIR.FHIRPath.Context.Sco
 {
 	/// TODO: This should be handled via ClassMethods rather than
 	/// recreating the context helper every time
-	Set scope = ##class(FHIR.FHIRPath.Context.Scope).%New()
+	Set scope = pInitialScope.Duplicate()
+	Do scope.Reset()
 	Set success = 0
 	If pInitialScope.DataType = "RESOURCE" {
 		/// TODO: Change this to a proper search of all the resources within this type,
 		/// the BuildResourceContext is a deprecated method for loading full context
 		Set ctx = ..BuildResourceContext(..Loader, pInitialScope.FHIRType)
+
 		Set success = ctx.AdvanceContext(pIdent)
 
 		Return:'success pInitialScope
@@ -161,7 +163,6 @@ Method CreateScope(pIdent As %String, pInitialScope As FHIR.FHIRPath.Context.Sco
 
 		Return scope
 	} ElseIf (pInitialScope.DataType = "FHIRTYPE") {
-
 		/// First check if this is a direct descendant of the current type
 		Set ref = ..AppendSubscript(pInitialScope.GlobalRef, pIdent)
 
@@ -180,6 +181,7 @@ Method CreateScope(pIdent As %String, pInitialScope As FHIR.FHIRPath.Context.Sco
 		Set typeRef = ..GetTypeRef(pInitialScope.GlobalRef)
 		
 		Return:typeRef="" pInitialScope
+
 		Set typeRef = ..AppendSubscript(typeRef, pIdent)
 
 		If $DATA(@typeRef) '= 0 {
@@ -198,6 +200,7 @@ Method CreateScope(pIdent As %String, pInitialScope As FHIR.FHIRPath.Context.Sco
 		Set corePkg = $LG(..Loader.packageIdList)
 		Set base = ..AppendSubscript(base, corePkg)
 		Set baseType = ..AppendSubscript(base, $lb("Type", pIdent))
+
 		Set baseResource = ..AppendSubscript(base, $lb("Resource", pIdent))
 		
 		If pIdent '= "" {
@@ -206,14 +209,19 @@ Method CreateScope(pIdent As %String, pInitialScope As FHIR.FHIRPath.Context.Sco
 				Set scope.Cardinality = 1
 				Set scope.DataType = "RESOURCE"
 				Set scope.FHIRType = pIdent
-				Set scope.GlobalRef = baseResource
+				Set scope.GlobalRef = ..DescendSubscript(baseResource)
+				Set scope.RootRef = scope.GlobalRef
+
+				Set success = 1
 				Return scope
 			} ElseIf ($DATA(@baseType)) {
 				/// Type is a FHIR Type
 				Set scope.Cardinality = 1
 				Set scope.DataType = "FHIRTYPE"
 				Set scope.FHIRType = pIdent
-				Set scope.GlobalRef = baseType
+				Set scope.GlobalRef = ..DescendSubscript(baseType)
+
+				Set success = 1
 				Return scope
 			}
 		}

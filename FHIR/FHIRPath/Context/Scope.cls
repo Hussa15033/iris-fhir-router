@@ -12,7 +12,7 @@ Class FHIR.FHIRPath.Context.Scope Extends %RegisteredObject
 /// 
 Property DataType As %String(VALUELIST = "NONE,RESOURCE,FHIRTYPE,BOOLEAN,STRING,INTEGER,LITERAL,UNKNOWN");
 
-Property CompletionType As %String(VALUELIST = "ANY,VALUE,TYPE,FUNCTION,OPERATOR,RESOURCE,LITERALTYPE") [ InitialExpression = "ANY" ];
+Property CompletionType As %String(VALUELIST = "ANY,VALUE,TYPE,FUNCTION,IDENTIFIER,OPERATOR,RESOURCE,LITERALTYPE,OPERATOR") [ InitialExpression = "ANY" ];
 
 Property CompletionScope As %String(VALUELIST = "ALL,DIRECT,CHILD");
 
@@ -28,6 +28,21 @@ Property GlobalRef As %String;
 
 Property Function As %String;
 
+/// Reference to the resource global
+Property RootRef As %String;
+
+Method MergeScope(pScope As FHIR.FHIRPath.Context.Scope)
+{
+	/// TODO: This merge function needs to be fixed to properly merge scopes
+	/// it currently performs an extremely basic merge (that is technically incorrect)
+	/// Merge another scope into this
+	Set pScope.DataType = "FHIRTYPE"
+	Set pScope.FHIRType = pScope.FHIRType _ ..FHIRType
+	Set pScope.Cardinality = ..Cardinality
+
+	Return pScope
+}
+
 Method Duplicate()
 {
 	Set dupe = ..%New()
@@ -39,6 +54,7 @@ Method Duplicate()
 	Set dupe.GlobalRef = ..GlobalRef
 	Set dupe.Function = ..Function
 	Set dupe.CompletionScope = ..CompletionScope
+	Set dupe.RootRef = ..RootRef
 	Return dupe
 }
 
