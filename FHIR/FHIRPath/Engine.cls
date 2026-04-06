@@ -17,10 +17,14 @@ Method AddBooleanOperators(pSuggestions As %ListOfDataTypes) [ Private ]
 	Do pSuggestions.Insert("implies")
 }
 
-Method AddComparisonOperators(pSuggestions As %ListOfDataTypes) [ Private ]
+Method AddEqualityOperators(pSuggestions As %ListOfDataTypes) [ Private ]
 {
 	Do pSuggestions.Insert("=")
 	Do pSuggestions.Insert("!=")
+}
+
+Method AddComparisonOperators(pSuggestions As %ListOfDataTypes) [ Private ]
+{
 	Do pSuggestions.Insert("<")
 	Do pSuggestions.Insert(">")
 	Do pSuggestions.Insert("<=")
@@ -87,6 +91,22 @@ Method Suggest(pScope As FHIR.FHIRPath.Context.Scope) As %ListOfDataTypes
 		Do ..AddBooleanFunctions(suggestions)
 	}
 
+	If (pScope.DataType = "FHIRTYPE") {
+		Do ..AddEqualityOperators(suggestions)
+
+		Set comparisonTypes = $lb("integer","decimal","Quantity","date","dateTime","time","string")
+		For i=1:1:$LL(comparisonTypes) {
+			Set quit = 0
+			If $LF(pScope.FHIRType, $LG(comparisonTypes, i)) {
+				/// If the type is a valid ordering type
+				Do ..AddComparisonOperators(suggestions)
+				Set quit = 1
+			}
+
+			Quit:quit
+		}
+	}
+
 	If (pScope.CompletionType = "FUNCTION") || $$$CANY {
 		/// If we're looking for functions or operators, we add comparison operators and functions
 		Do ..AddFunctions(suggestions)
@@ -138,15 +158,38 @@ Method Suggest(pScope As FHIR.FHIRPath.Context.Scope) As %ListOfDataTypes
 		/// Create a generic context helper up above.
 		Set ctxHelper = ##class(FHIR.FHIRPath.FHIRContextHelper).%New(..Loader, "Patient")
 
-		/// Look up details of the ValueSets according to the current ref
-		Set valueSets = ctxHelper.FindPropertyFromRef(pScope.GlobalRef, "vs")
-		Set fixedValues = ctxHelper.FindPropertyFromRef(pScope.GlobalRef, "fv")
-		
-		Set suggestions2 = fixedValues
-	
-		For i=1:1:$LL(valueSets) {
-			Set suggestions2 = suggestions2 _ ctxHelper.ExpandValueSet($LG(valueSets, i))
+		/// TODO: This is a bit of a hacky way of differentiating value suggestions from
+		/// codes, which may include the system property, and other fields.
+		/// May be a better idea to filter on the "code" and "system" siblings directly
+		/// rather than on other fields, needs to be investigated mroe to see if
+		/// system/code are the only relevant fields with valuesets and codesystems
+
+		If (pScope.LastField = "code") {
+			/// TODO: For codes, we should check sibling properties, although
+			/// might be better to check for "system" (see above)
+			Set parentRef = ctxHelper.AscendSubscript(pScope.GlobalRef)
+			Set children = ctxHelper.FindImmediateDescendants(parentRef)
+		} Else {
+			/// The only node we should check is the current one
+			Set children = $lb(pScope.GlobalRef)
 		}
+
+		Set systems = ""
+
+		Set suggestions2 = ""
+
+		For i=1:1:$LL(children) {
+			Set ref = $LG(children, i)
+
+			/// Look up details of the ValueSets according to the current ref
+			Set valueSets = ctxHelper.FindPropertyFromRef(ref, "vs")
+			Set fixedValues = ctxHelper.FindPropertyFromRef(ref, "fv")
+
+			Set systems = systems _ valueSets _ fixedValues
+			Set suggestions2 = suggestions2 _ fixedValues
+		}
+	
+		Do ..ExpandSystems(systems, .suggestions2)
 
 		For i=1:1:$LL(suggestions2) {
 			Do suggestions.Insert("'" _ $LG(suggestions2, i) _ "'")
@@ -195,6 +238,36 @@ Method Suggest(pScope As FHIR.FHIRPath.Context.Scope) As %ListOfDataTypes
 		Do suggestions.Insert($LG(pScope.ScopedVariables, i))
 	}
 	Return suggestions
+}
+
+Method ExpandSystems(systems As %List, Output codes As %List = "") [ Private ]
+{
+	For i=1:1:$LL(systems) {
+		Set s = $LG(systems, i)
+
+		/// Remove version number
+		Set s = $PIECE(s, "|")
+
+		Set hasData = $DATA(^FHIR.TypeAssist("Data", s))
+		Continue:'hasData
+
+		Set data = ^FHIR.TypeAssist("Data", s)
+
+		For j=1:1:$LL(data) {
+			Set value = $LG(data, j)
+			Set type = $PIECE(value, ":", 1)
+
+			If (type = value) || (type = "code") {
+				/// This is most likely a code
+				Set codes = codes _ $lb(value)
+			} ElseIf (type = "cs") || (type = "vs") {
+				/// This is a code system or another valueset, call recursively
+				Do ..ExpandSystems($lb($PIECE(value, ":", 2, *)), .codes)
+			}
+		}
+	}
+
+	Return ""
 }
 
 }

@@ -187,10 +187,9 @@ Method InferFunctionScope(pFnName As %String, pScope As FHIR.FHIRPath.Context.Sc
 		Return:'success pScope
 
 		Set nextScope.CompletionType = "VALUE"
+		Set nextScope.CompletionScope = "DIRECT"
 
 		Set pScope = nextScope
-		
-		zw pScope
 	}
 	Return pScope
 }
@@ -245,6 +244,7 @@ Method InferType(pNode As FHIR.FHIRPath.Expr.Expression, pScope As FHIR.FHIRPath
 			
 			/// Right scope is empty and does not contain any identifier/prefix, so we suggest based on the left scope
 			If (rightScope.DataType = "UNKNOWN") {
+				/// TODO: Change CompletionType to be a COMMA separated list
 				Set leftScope.CompletionType = "ANY"
 				/// Reset the token prefix set on the left side, as RHS is empty
 				Set leftScope.PrefixToken = ""
@@ -257,6 +257,7 @@ Method InferType(pNode As FHIR.FHIRPath.Expr.Expression, pScope As FHIR.FHIRPath
 			If rightScope.DataType = "UNKNOWN" {
 				/// The RHS does not have any data within it
 				Set leftScope.CompletionType = "VALUE"
+				Set leftScope.CompletionScope = "ALL"
 				Return leftScope
 			}
 
@@ -329,6 +330,33 @@ Method InferType(pNode As FHIR.FHIRPath.Expr.Expression, pScope As FHIR.FHIRPath
 				/// Now merge the scopes
 				Set scope = pScope.MergeScope(scopeOfArg)
 				Return scope
+			} ElseIf (pNode.Callee.Name = "as") {
+				/// Try to cast/infer type
+				Do ..InferType(pNode.Args.GetAt(1), pScope)
+
+				/// For choice fields, attempt to create a scope
+				Set type = pScope.PrefixToken
+				
+				/// TODO: Odd way of doing this, should perform this at the stage of setting the FHIRType,
+				/// not here
+				If ($LF($LISTFROMSTRING($LISTTOSTRING(pScope.FHIRType)), type)) {
+					/// This is a valid type for this field, cast as this type
+					/// and move the context to a subfield if this was a
+					/// choice field
+					Set pScope.GlobalRef = ..ContextHelper.AscendSubscript(pScope.GlobalRef)
+					Set nScope = ..CreateScope(pScope.LastField _ type, pScope, .success)
+
+					Set:success pScope = nScope
+				}
+
+				/// Consume the token regardless of if this type was valid
+				Set pScope.PrefixToken = ""
+
+				Set pScope.CompletionScope = "DIRECT"
+				Set pScope.CompletionType = "IDENTIFIER"
+
+				Return pScope
+
 			} Else {
 				/// TODO: This else statement should be removed, only here for development purposes until
 				/// tests pass
@@ -346,6 +374,8 @@ Method InferType(pNode As FHIR.FHIRPath.Expr.Expression, pScope As FHIR.FHIRPath
 			// the updated scope
 			Set scope.PrefixToken = ""
 			Set scope.CompletionType = "ANY"
+
+			Set scope.LastField = pNode.Name
 
 			Return scope
 		}
@@ -451,6 +481,7 @@ Method Suggest(pExpression As %String, scope As %RegisteredObject = "") As %List
 
 	For i=1:1:suggestions.Size {
 		Set suggestion = suggestions.GetAt(i)
+
 		If ($EXTRACT(suggestion, 1, $L(prefix)) = prefix) || (prefix = "") {
 			Do outputList.Insert(suggestion)
 		}

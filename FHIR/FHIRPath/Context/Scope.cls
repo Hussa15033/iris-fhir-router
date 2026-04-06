@@ -28,6 +28,8 @@ Property GlobalRef As %String;
 
 Property Function As %String;
 
+Property LastField As %String;
+
 /// Reference to the resource global
 Property RootRef As %String;
 
@@ -55,6 +57,7 @@ Method Duplicate()
 	Set dupe.Function = ..Function
 	Set dupe.CompletionScope = ..CompletionScope
 	Set dupe.RootRef = ..RootRef
+	Set dupe.LastField = ..LastField
 	Return dupe
 }
 
@@ -69,6 +72,7 @@ Method Reset()
 	Set ..Function = ""
 	Set ..PrefixToken = ""
 	Set ..CompletionScope = ""
+	Set ..LastField = ""
 }
 
 Method ScopedVariablesSet(pVal) As %Status

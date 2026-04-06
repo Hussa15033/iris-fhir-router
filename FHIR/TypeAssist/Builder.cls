@@ -16,7 +16,7 @@ ClassMethod Load(pLoader As HS.FHIRMeta.Load.NpmLoader)
 Method %OnNew(pLoader As HS.FHIRMeta.Load.NpmLoader) As %Status
 {
 	Set ..Loader = pLoader
-	
+		
 	Set iter = pLoader.getRsrcIterator("StructureDefinition")
 
 	While iter.Next(.json) {
@@ -42,33 +42,60 @@ Method %OnNew(pLoader As HS.FHIRMeta.Load.NpmLoader) As %Status
 	/// Now traverse and update all ValueSets
 	Do ..LoadValueSets()
 
+	/// Load CodeSystems
+	Do ..LoadCodeSystems()
+
 	Return $$$OK
 }
 
 Method LoadValueSets()
 {
+	Set vIter = ..Loader.getRsrcIterator("ValueSet")
+
+	While (vIter.Next(.json)) {
+		Set vsUrl = json.url
+		Set vsVers = json.version
+		Set data = ""
+		If json.compose '= "" {
+			/// include is a required property
+			Set iter = json.compose.include.%GetIterator()
+			While iter.%GetNext(.k1, .include) {
+				If (include.system '= "") {
+					/// Select specific codes from this system
+					If include.concept '= "" {
+						Set conceptIter = include.concept.%GetIterator()
+						While conceptIter.%GetNext(.k2, .concept) {
+							Set data = data _ $lb("code:" _ concept.code)
+						}
+					} Else {
+						/// Add the whole system
+						Set data = data _ $lb("cs:" _ include.system)
+					}
+				}
+
+				If (include.valueSet '= "") {
+					Set vsIter = include.valueSet.%GetIterator()
+					while vsIter.%GetNext(.k1, .valueSet ) {
+						Set data = data _ $lb("vs:" _ valueSet)
+					}
+				}
+			}
+
+			If (data '= "") {
+				Set gRef = ..AppendSubscript("^FHIR.TypeAssist", $lb("Data", json.url))
+				Set @gRef = data
+			}
+		}
+	}
+}
+
+Method LoadCodeSystems()
+{
 	/// Rather than following the logic for the $expand operation,
 	/// use the built in expand operation
 	Set vsLoader = ##class(HS.FHIRMeta.Load.ValueSets).%New(..Loader)
 
-	Set vIter = ..Loader.getRsrcIterator("ValueSet")
-
-
-	While (vIter.Next(.json)) {
-		Kill code,codeList,codes
-		Do vsLoader.getValueSetCodes(json.url, .codes)
-
-		Set code = ""
-		Set codeList = ""
-		For {
-			Set code = $O(codes(code))
-			Quit:code=""
-			Set codeList = codeList _ $lb(code)
-		}
-
-		Set gRef = ..AppendSubscript("^FHIR.TypeAssist", $lb("ValueSet", json.url, json.version))
-		Set @gRef = codeList
-	}
+	Merge ^FHIR.TypeAssist("Data") = vsLoader.codeSystems
 }
 
 Method GetPkgIdForURL(pUrl As %String)

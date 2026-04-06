@@ -622,6 +622,11 @@ Method GetTypeRef(rootRef As %String) As %String
 	Return ..DescendSubscript(base)
 }
 
+Method AscendSubscript(ref As %String) As %String
+{
+	Return $NAME(@ref, $QL(ref) - 1)
+}
+
 Method DescendSubscript(ref As %String) As %String
 {
 	Set child = $O(@ref@(""))
