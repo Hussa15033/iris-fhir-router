@@ -242,6 +242,8 @@ Method InferType(pNode As FHIR.FHIRPath.Expr.Expression, pScope As FHIR.FHIRPath
 		Set fnOps = $lb("is", "as", "|")
 
 		If pNode.Op = "." {
+			Set leftScope.CompletionType = "ANY"
+
 			Set rightScope = ..InferType(pNode.Right, leftScope)
 			
 			/// Right scope is empty and does not contain any identifier/prefix, so we suggest based on the left scope
@@ -336,7 +338,7 @@ Method InferType(pNode As FHIR.FHIRPath.Expr.Expression, pScope As FHIR.FHIRPath
 				Return pScope
 			} ElseIf (pNode.Callee.Name = "first") || (pNode.Callee.Name = "last") || (pNode.Callee.Name = "single") {
 				Set pScope.Cardinality = 1
-
+				Set pScope.CompletionType = "NONE"
 				Return pScope
 			} ElseIf (pNode.Callee.Name = "ofType") {
 				/// Create a new scope to be modified
