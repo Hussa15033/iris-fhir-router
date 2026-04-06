@@ -148,10 +148,10 @@ Method CreateScope(pIdent As %String, pInitialScope As FHIR.FHIRPath.Context.Sco
 	Set scope = pInitialScope.Duplicate()
 	Do scope.Reset()
 	Set success = 0
-	If pInitialScope.DataType = "RESOURCE" {
+	If (pInitialScope.DataType = "RESOURCE") && ($LL(pInitialScope.FHIRType) = 1) {
 		/// TODO: Change this to a proper search of all the resources within this type,
 		/// the BuildResourceContext is a deprecated method for loading full context
-		Set ctx = ..BuildResourceContext(..Loader, pInitialScope.FHIRType)
+		Set ctx = ..BuildResourceContext(..Loader, $LG(pInitialScope.FHIRType, 1))
 
 		Set success = ctx.AdvanceContext(pIdent)
 

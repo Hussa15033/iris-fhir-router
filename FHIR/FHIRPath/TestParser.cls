@@ -50,6 +50,8 @@ ClassMethod RunOneTest(pI, pSearchTerm, pSuggestion, pPackage = "hl7.fhir.r4.cor
 			}
 			Set found = ""
 			W " - Exception occurred",!
+
+			Throw:^AFPSOF ##class(%Exception.General).%New("STOP ON FAIL","-11003",,"Stop On Fail clause ran")
 			Return 0
 		}
 
@@ -66,12 +68,13 @@ ClassMethod RunOneTest(pI, pSearchTerm, pSuggestion, pPackage = "hl7.fhir.r4.cor
 			Write " - Success",!
 			Return 1
 		} Else {
+			Throw:^AFPSOF ##class(%Exception.General).%New("STOP ON FAIL","-11003",,"Stop On Fail clause ran")
 			Write " - **Failed",!
 			Return 0
 		}
 }
 
-ClassMethod Test(pDebug = 0, pTestNumber = "")
+ClassMethod Test(pDebug = 0, pTestNumber = "", pStopOnFail = 0)
 {
 	Kill ^AFPDEBUG
 	Kill ^AFPTests
@@ -81,6 +84,7 @@ ClassMethod Test(pDebug = 0, pTestNumber = "")
 	Set ^AFPTestsSuccess = 0
 	Set ^AFPTestNumber = pTestNumber
 	Set ^AFPDEBUG = pDebug
+	Set ^AFPSOF = pStopOnFail
 	Set startTime = $ZHOROLOG
 	Do ..RunOneTest(1, "Patient.", "name.")
 	Do ..RunOneTest(2, "Patient.", "telecom.")
@@ -120,7 +124,7 @@ ClassMethod Test(pDebug = 0, pTestNumber = "")
 	Do ..RunOneTest(36, "Bundle.entry.resource.ofType(P", "Patient")
 	Do ..RunOneTest(37, "Organization.partOf.re", "resolve()")
 	Do ..RunOneTest(38, "Bundle.entry.resource.ofType(Encounter).s", "skip(")
-	Do ..RunOneTest(39, "'abcdefg'.star", "startsWith(", "Patient")
+	Do ..RunOneTest(39, "'abcdefg'.star", "startsWith(",,"Patient")
 	Do ..RunOneTest(40, "Bundle.entry.resource.ofType(Observation).t", "tail()")
 	Do ..RunOneTest(41, "Patient.name.tak", "take(")
 	Do ..RunOneTest(42, "Practitioner.name.family.unio", "union(")

@@ -109,7 +109,7 @@ Method InorderTraversal(pExpr As FHIR.FHIRPath.Expr.Expression, ByRef pCtx As FH
 	} ElseIf cls = "FHIR.FHIRPath.Expr.UnaryExpr" { 
 		Do ..InorderTraversal(pExpr.Expr, .pCtx, .finalTokenPrefix, .suggestValues, .refWithinFunctionCall, withinFunctionCall)
 	} Else {
-		Throw ##class(%Exception.General).%New("Unable to handle class " _cls)
+		Throw ##class(%Exception.General).%New("Unable to handle class " _cls, "-33112")
 	}
 
 	Quit
@@ -134,6 +134,8 @@ ClassMethod MarkCursor(pNode As FHIR.FHIRPath.Expr.Expression) As %Boolean
 		Set pNode.ContainsCursor = 1
 		Return 1
 	} ElseIf cls = "FHIR.FHIRPath.Expr.CallExpr" {
+		Return:pNode.Partial 1
+		Return:pNode.Args.Size=0 0
 		Set pNode.ContainsCursor = ..MarkCursor(pNode.Args.GetAt(pNode.Args.Size))
 		Return pNode.ContainsCursor
 	} ElseIf cls = "FHIR.FHIRPath.Expr.IndexExpr" {
@@ -146,7 +148,7 @@ ClassMethod MarkCursor(pNode As FHIR.FHIRPath.Expr.Expression) As %Boolean
 		Set pNode.ContainsCursor = ..MarkCursor(pNode.Expr)
 		Return pNode.ContainsCursor
 	} Else {
-		Throw ##class(%Exception.General).%New("Unable to handle class " _cls)
+		Throw ##class(%Exception.General).%New("Unable to handle class " _ cls, "-33113")
 	}
 
 	Return 0
@@ -319,9 +321,10 @@ Method InferType(pNode As FHIR.FHIRPath.Expr.Expression, pScope As FHIR.FHIRPath
 			Return fnScope
 		} Else {
 			/// If the call is not partial, we can infer the type based on the function definition
-			Set unchangedScopeFns = $lb("where","skip","single","first","last","tail", "extension")
+			Set unchangedScopeFns = $lb("where","skip","tail", "extension")
 			If $LF(unchangedScopeFns, pNode.Callee.Name) {
-				/// These functions do not change the scope
+				/// These functions do not change the scope in any way
+				Set pScope.CompletionType = "NONE"
 				Return pScope
 			} ElseIf (pNode.Callee.Name = "exists") || (pNode.Callee.Name = "not") {
 				Set pScope.DataType = "BOOLEAN"
@@ -329,8 +332,10 @@ Method InferType(pNode As FHIR.FHIRPath.Expr.Expression, pScope As FHIR.FHIRPath
 				Set pScope.CompletionType = "ANY"
 				Set pScope.Cardinality = 1
 				Return pScope
-			} ElseIf (pNode.Callee.Name = "first") {
+			} ElseIf (pNode.Callee.Name = "first") || (pNode.Callee.Name = "last") || (pNode.Callee.Name = "single") {
 				Set pScope.Cardinality = 1
+
+				Return pScope
 			} ElseIf (pNode.Callee.Name = "ofType") {
 				/// Create a new scope to be modified
 				Set freshScope = ##class(FHIR.FHIRPath.Context.Scope).%New()
@@ -410,11 +415,20 @@ Method InferType(pNode As FHIR.FHIRPath.Expr.Expression, pScope As FHIR.FHIRPath
 		#; Do ..InorderTraversal(pExpr.Field, .pCtx, .finalTokenPrefix, .suggestValues, .refWithinFunctionCall, withinFunctionCall)
 	}ElseIf (name = "NumberExpr") || (name = "DecimalExpr") || (name = "QuantityExpr") {
 	}ElseIf (name = "StringExpr") {
-		#;Do pCtx.AdvanceString()
+		/// This type is a literal
+		Set scope = pScope.Duplicate()
+
+		/// Consume the prefixToken
+		Set scope.PrefixToken = ""
+		Set scope.DataType = "STRING"
+		Set scope.FHIRType = ""
+		Set scope.CompletionType = "ANY"
+
+		Return scope
 	}ElseIf name = "UnaryExpr" { 
 		#; Do ..InorderTraversal(pExpr.Expr, .pCtx, .finalTokenPrefix, .suggestValues, .refWithinFunctionCall, withinFunctionCall)
 	}Else {
-		Throw ##class(%Exception.General).%New("Unable to handle class " _cls)
+		Throw ##class(%Exception.General).%New("Unable to handle class " _cls, "-33114")
 	}
 
 	Return pScope

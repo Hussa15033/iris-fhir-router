@@ -77,11 +77,14 @@ Method Suggest(pScope As FHIR.FHIRPath.Context.Scope) As %ListOfDataTypes
 	#define CRESOURCE				$$$HasCT("RESOURCE")
 	#define CTYPE					$$$HasCT("TYPE")
 	#define CVAL					$$$HasCT("VALUE")
+	#define CNONE					$$$HasCT("NONE")
 	/// TODO: Clean up the logic within the function to other helper functions and perhaps using basic
 	/// branches, based on how DataType and CompletionType are used
 	/// This type assist engine uses the scope to determine what suggestions to provide
 	Set suggestions = ##class(%ListOfDataTypes).%New()
 
+	Return:$$$CNONE suggestions
+	
 	If (pScope.CompletionType = "BOOLEAN") {
 		/// If the data type is boolean and we're looking for operators
 		Do ..AddBooleanOperators(suggestions)
@@ -112,9 +115,9 @@ Method Suggest(pScope As FHIR.FHIRPath.Context.Scope) As %ListOfDataTypes
 		}
 	}
 
-	If (pScope.DataType = "RESOURCE") && (pScope.FHIRType'="") {
+	If (pScope.DataType = "RESOURCE") && (pScope.FHIRType'="") && ($LL(pScope.FHIRType) = 1) {
 		/// Find all properties of this resource type
-		Set ctxHelper = ##class(FHIR.FHIRPath.FHIRContextHelper).%New(..Loader, pScope.FHIRType)
+		Set ctxHelper = ##class(FHIR.FHIRPath.FHIRContextHelper).%New(..Loader, $LG(pScope.FHIRType, 1))
 		Set desc = ctxHelper.FindImmediateDescendants(ctxHelper.GlobalRef)
 
 		For i=1:1:$LL(desc) {
@@ -148,10 +151,10 @@ Method Suggest(pScope As FHIR.FHIRPath.Context.Scope) As %ListOfDataTypes
 		}
 
 		Do suggestions.Insert("iif(")
+	}
 
-		If $LF(pScope.FHIRType, "string") || $LF(pScope.FHIRType, "code") {
-			Do ..AddStringFunctions(suggestions)
-		}
+	If ($$$CIDENT || $$$CANY) && ($LF(pScope.FHIRType, "string") || $LF(pScope.FHIRType, "code") || (pScope.DataType = "STRING")) {
+		Do ..AddStringFunctions(suggestions)
 	}
 
 	If ($$$CVAL) {

@@ -12,7 +12,7 @@ Class FHIR.FHIRPath.Context.Scope Extends %RegisteredObject
 /// 
 Property DataType As %String(VALUELIST = "NONE,RESOURCE,FHIRTYPE,BOOLEAN,STRING,INTEGER,LITERAL,UNKNOWN");
 
-Property CompletionType As %String(VALUELIST = "ANY,VALUE,TYPE,FUNCTION,IDENTIFIER,OPERATOR,RESOURCE,LITERALTYPE,OPERATOR") [ InitialExpression = "ANY" ];
+Property CompletionType As %String(VALUELIST = "ANY,VALUE,TYPE,FUNCTION,IDENTIFIER,RESOURCE,LITERALTYPE,OPERATOR,NONE") [ InitialExpression = "ANY" ];
 
 Property CompletionScope As %String(VALUELIST = "ALL,DIRECT,CHILD");
 
@@ -73,6 +73,15 @@ Method Reset()
 	Set ..PrefixToken = ""
 	Set ..CompletionScope = ""
 	Set ..LastField = ""
+}
+
+Method FHIRTypeSet(pVal) As %Status
+{
+	If '$LISTVALID(pVal) && (pVal '= "") {
+		Set pVal = $lb(pVal)
+	}
+
+	Set i%FHIRType = pVal
 }
 
 Method ScopedVariablesSet(pVal) As %Status
