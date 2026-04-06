@@ -82,13 +82,9 @@ Method Suggest(pScope As FHIR.FHIRPath.Context.Scope) As %ListOfDataTypes
 	/// This type assist engine uses the scope to determine what suggestions to provide
 	Set suggestions = ##class(%ListOfDataTypes).%New()
 
-	If (pScope.DataType = "BOOLEAN") && $$$COP {
+	If (pScope.CompletionType = "BOOLEAN") {
 		/// If the data type is boolean and we're looking for operators
 		Do ..AddBooleanOperators(suggestions)
-	}
-
-	If (pScope.DataType = "BOOLEAN") && (pScope.Cardinality = 1) {
-		Do ..AddBooleanFunctions(suggestions)
 	}
 
 	If (pScope.DataType = "FHIRTYPE") {
@@ -110,6 +106,10 @@ Method Suggest(pScope As FHIR.FHIRPath.Context.Scope) As %ListOfDataTypes
 	If (pScope.CompletionType = "FUNCTION") || $$$CANY {
 		/// If we're looking for functions or operators, we add comparison operators and functions
 		Do ..AddFunctions(suggestions)
+
+		If (pScope.Cardinality = 1) {
+			Do ..AddBooleanFunctions(suggestions)
+		}
 	}
 
 	If (pScope.DataType = "RESOURCE") && (pScope.FHIRType'="") {

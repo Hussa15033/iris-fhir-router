@@ -139,7 +139,7 @@ ClassMethod MarkCursor(pNode As FHIR.FHIRPath.Expr.Expression) As %Boolean
 	} ElseIf cls = "FHIR.FHIRPath.Expr.IndexExpr" {
 		Set pNode.ContainsCursor = ..MarkCursor(pNode.Field)
 		Return pNode.ContainsCursor
-	} ElseIf (cls = "FHIR.FHIRPath.Expr.NumberExpr") || (cls = "FHIR.FHIRPath.Expr.DecimalExpr") || (cls = "FHIR.FHIRPath.Expr.StringExpr") {
+	} ElseIf (cls = "FHIR.FHIRPath.Expr.NumberExpr") || (cls = "FHIR.FHIRPath.Expr.DecimalExpr") || (cls = "FHIR.FHIRPath.Expr.StringExpr") || (cls = "FHIR.FHIRPath.Expr.QuantityExpr") {
 		Set pNode.ContainsCursor = 1
 		Return 1
 	} ElseIf cls = "FHIR.FHIRPath.Expr.UnaryExpr" { 
@@ -173,7 +173,7 @@ Method InferFunctionScope(pFnName As %String, pScope As FHIR.FHIRPath.Context.Sc
 	} ElseIf (pFnName = "is") || (pFnName = "ofType") {
 		Set pScope.CompletionType = "TYPE"
 		Set pScope.CompletionScope = "ALL"
-	} ElseIf (pFnName = "union") {
+	} ElseIf (pFnName = "union") || (pFnName = "|") {
 		Set pScope.CompletionType = "RESOURCE,IDENTIFIER"
 		Set pScope.CompletionScope = "DIRECT"
 		Set pScope.GlobalRef = pScope.RootRef
@@ -237,7 +237,7 @@ Method InferType(pNode As FHIR.FHIRPath.Expr.Expression, pScope As FHIR.FHIRPath
 		Set leftScope = ..InferType(pNode.Left, pScope)
 
 		/// Operators that double as functions
-		Set fnOps = $lb("is", "as")
+		Set fnOps = $lb("is", "as", "|")
 
 		If pNode.Op = "." {
 			Set rightScope = ..InferType(pNode.Right, leftScope)
@@ -263,8 +263,8 @@ Method InferType(pNode As FHIR.FHIRPath.Expr.Expression, pScope As FHIR.FHIRPath
 
 			/// If the RHS does have data in it, we assume this BEXP is complete
 			Set newScope = ##class(FHIR.FHIRPath.Context.Scope).%New()
-			Set newScope.CompletionType = "OPERATOR"
-			Set newScope.DataType = "BOOLEAN"
+			Set newScope.CompletionType = "BOOLEAN"
+			Set newScope.CompletionScope = "ALL"
 
 			Return newScope
 		} ElseIf $LF(fnOps, pNode.Op) {
@@ -276,8 +276,24 @@ Method InferType(pNode As FHIR.FHIRPath.Expr.Expression, pScope As FHIR.FHIRPath
 			Return:rightScope'="UNKNOWN" rightScope
 			Return pScope
 		} Else {
+			#; 109
+			#; 118
+			#; 98
+			#; 85
+			#; 69
+			#; 70
+			#; 71
+			w !,!,"OP="_pNode.Op,!,!
 			/// By default, we pass the initial scope to the RHS tree of the BEXP
 			Set rightScope = ..InferType(pNode.Right, pScope)
+
+			If rightScope.DataType '= "UNKNOWN" {
+				Set scope = ##class(FHIR.FHIRPath.Context.Scope).%New()
+				Set scope.CompletionType = "BOOLEAN"
+				Set scope.CompletionScope = "ALL"
+			} Else {
+				Set scope = rightScope
+			}
 
 			Return rightScope
 		}
@@ -392,7 +408,7 @@ Method InferType(pNode As FHIR.FHIRPath.Expr.Expression, pScope As FHIR.FHIRPath
 		Set scope.Cardinality = 1
 		Return scope
 		#; Do ..InorderTraversal(pExpr.Field, .pCtx, .finalTokenPrefix, .suggestValues, .refWithinFunctionCall, withinFunctionCall)
-	}ElseIf (name = "NumberExpr") || (name = "DecimalExpr") {
+	}ElseIf (name = "NumberExpr") || (name = "DecimalExpr") || (name = "QuantityExpr") {
 	}ElseIf (name = "StringExpr") {
 		#;Do pCtx.AdvanceString()
 	}ElseIf name = "UnaryExpr" { 
