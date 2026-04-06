@@ -24,17 +24,18 @@ ClassMethod RunOneTest(pI, pSearchTerm, pSuggestion, pPackage = "hl7.fhir.r4.cor
 		/// Run a search term and ensure pSuggestion is in the list of suggestions returned
 		Try {
 			Set isNegativeTest = 0
+			Set suggestion = pSuggestion
 			If ($EXTRACT(pSuggestion, 1, 1) = "!") {
-				Set pSuggestion = $EXTRACT(pSuggestion, 2, *)
+				Set suggestion = $EXTRACT(pSuggestion, 2, *)
 				Set isNegativeTest = 1
 			}
 			Set autocomplete = ##class(FHIR.FHIRPath.Autocomplete).%New(pPackage, pResourceFilter)
 
 			Set suggestionList = autocomplete.Suggest(pSearchTerm)
 
-			Set found = suggestionList.Find(pSuggestion) '= ""
+			Set found = suggestionList.Find(suggestion) '= ""
 
-			If (pSuggestion = "") {
+			If (suggestion = "") {
 				Set found = (suggestionList.Size = 0)
 			}
 
@@ -225,6 +226,10 @@ ClassMethod Test(pDebug = 0, pTestNumber = "")
 	Do ..RunOneTest(141, "true and fal", "false")
 	Do ..RunOneTest(142, "Hu", "!HumanName")
 	Do ..RunOneTest(143, "Hu", "!HumanName.")
+	Do ..RunOneTest(144, "Observation.component.where(value.as(Quantity).", "unit")
+	Do ..RunOneTest(145, "Observation.component.where(value.as(Quantity).unit", ">=")
+	Do ..RunOneTest(146, "Observation.component.where(value.as(Quantity).", "!Patient.")
+	Do ..RunOneTest(147, "Observation.value.aggregate(iif($nontexistent.", "!empty()")
 
 	
 	
