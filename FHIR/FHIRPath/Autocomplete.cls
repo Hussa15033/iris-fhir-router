@@ -251,7 +251,10 @@ Method InferType(pNode As FHIR.FHIRPath.Expr.Expression, pScope As FHIR.FHIRPath
 				/// Reset the token prefix set on the left side, as RHS is empty
 				Set leftScope.PrefixToken = ""
 				Return leftScope
+			} ElseIf (rightScope.DataType = "STRING") {
+				Set rightScope.CompletionType = "FUNCTION"
 			}
+
 			Return rightScope
 		} ElseIf ((pNode.Op = "=") || (pNode.Op = "!=")) {
 
@@ -285,7 +288,6 @@ Method InferType(pNode As FHIR.FHIRPath.Expr.Expression, pScope As FHIR.FHIRPath
 			#; 69
 			#; 70
 			#; 71
-			w !,!,"OP="_pNode.Op,!,!
 			/// By default, we pass the initial scope to the RHS tree of the BEXP
 			Set rightScope = ..InferType(pNode.Right, pScope)
 
@@ -321,7 +323,7 @@ Method InferType(pNode As FHIR.FHIRPath.Expr.Expression, pScope As FHIR.FHIRPath
 			Return fnScope
 		} Else {
 			/// If the call is not partial, we can infer the type based on the function definition
-			Set unchangedScopeFns = $lb("where","skip","tail", "extension")
+			Set unchangedScopeFns = $lb("where","skip","tail","extension")
 			If $LF(unchangedScopeFns, pNode.Callee.Name) {
 				/// These functions do not change the scope in any way
 				Set pScope.CompletionType = "NONE"
@@ -414,6 +416,7 @@ Method InferType(pNode As FHIR.FHIRPath.Expr.Expression, pScope As FHIR.FHIRPath
 		Return scope
 		#; Do ..InorderTraversal(pExpr.Field, .pCtx, .finalTokenPrefix, .suggestValues, .refWithinFunctionCall, withinFunctionCall)
 	}ElseIf (name = "NumberExpr") || (name = "DecimalExpr") || (name = "QuantityExpr") {
+		Set pScope.CompletionType = "NONE"
 	}ElseIf (name = "StringExpr") {
 		/// This type is a literal
 		Set scope = pScope.Duplicate()
@@ -422,7 +425,8 @@ Method InferType(pNode As FHIR.FHIRPath.Expr.Expression, pScope As FHIR.FHIRPath
 		Set scope.PrefixToken = ""
 		Set scope.DataType = "STRING"
 		Set scope.FHIRType = ""
-		Set scope.CompletionType = "ANY"
+		Set scope.CompletionType = "NONE"
+		Set scope.CompletionScope = "DIRECT"
 
 		Return scope
 	}ElseIf name = "UnaryExpr" { 

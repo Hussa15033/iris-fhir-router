@@ -84,7 +84,7 @@ Method Suggest(pScope As FHIR.FHIRPath.Context.Scope) As %ListOfDataTypes
 	Set suggestions = ##class(%ListOfDataTypes).%New()
 
 	Return:$$$CNONE suggestions
-	
+
 	If (pScope.CompletionType = "BOOLEAN") {
 		/// If the data type is boolean and we're looking for operators
 		Do ..AddBooleanOperators(suggestions)
@@ -153,7 +153,7 @@ Method Suggest(pScope As FHIR.FHIRPath.Context.Scope) As %ListOfDataTypes
 		Do suggestions.Insert("iif(")
 	}
 
-	If ($$$CIDENT || $$$CANY) && ($LF(pScope.FHIRType, "string") || $LF(pScope.FHIRType, "code") || (pScope.DataType = "STRING")) {
+	If ($$$CIDENT || $$$CANY || $$$CFN) && ($LF(pScope.FHIRType, "string") || $LF(pScope.FHIRType, "code") || (pScope.DataType = "STRING")) {
 		Do ..AddStringFunctions(suggestions)
 	}
 
@@ -227,7 +227,7 @@ Method Suggest(pScope As FHIR.FHIRPath.Context.Scope) As %ListOfDataTypes
 		}
 	}
 
-	If ($$$CRESOURCE) || ($$$CANY) {
+	If ($$$CRESOURCE) {
 		Set tRS = ##class(%SQL.Statement).%ExecDirectNoPrivNoAudit(,"SELECT DISTINCT(type) FROM HS_FHIRMeta_Storage.Rsrc WHERE coreVersion=? AND (kind='resource') AND id=type", ..Loader.coreVersion)
 		Set suffix = ""
 		Set:pScope.Function="" suffix = "."

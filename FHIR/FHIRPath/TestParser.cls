@@ -137,7 +137,7 @@ ClassMethod Test(pDebug = 0, pTestNumber = "", pStopOnFail = 0)
 	Do ..RunOneTest(49, "Patient.telecom.where(1 > -1).first().", "use.")
 	Do ..RunOneTest(50, "Patient.telecom.where(1 and 1).first().", "value.")
 	Do ..RunOneTest(51, "Patient.telecom.where(1 or 0).first()", "")
-	Do ..RunOneTest(52, "Practitioner.name.family | Pra", "Practitioner.")
+	Do ..RunOneTest(52, "Practitioner.name.family | Pra", "Practitioner")
 	Do ..RunOneTest(53, "Practitioner.name[1].family != 'Smith' ", "or")
 	Do ..RunOneTest(54, "Practitioner.name[1].family != 'Smith' ", "xor")
 	Do ..RunOneTest(55, "Practitioner.name[0].family = 'Cooper'", "and")
@@ -234,6 +234,7 @@ ClassMethod Test(pDebug = 0, pTestNumber = "", pStopOnFail = 0)
 	Do ..RunOneTest(145, "Observation.component.where(value.as(Quantity).unit", ">=")
 	Do ..RunOneTest(146, "Observation.component.where(value.as(Quantity).", "!Patient.")
 	Do ..RunOneTest(147, "Observation.value.aggregate(iif($nontexistent.", "!empty()")
+	Do ..RunOneTest(148, "Practitioner.name.family | Practitioner.", "name.")
 
 	
 	

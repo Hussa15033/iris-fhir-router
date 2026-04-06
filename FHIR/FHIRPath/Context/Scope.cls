@@ -12,7 +12,7 @@ Class FHIR.FHIRPath.Context.Scope Extends %RegisteredObject
 /// 
 Property DataType As %String(VALUELIST = "NONE,RESOURCE,FHIRTYPE,BOOLEAN,STRING,INTEGER,LITERAL,UNKNOWN");
 
-Property CompletionType As %String(VALUELIST = "ANY,VALUE,TYPE,FUNCTION,IDENTIFIER,RESOURCE,LITERALTYPE,OPERATOR,NONE") [ InitialExpression = "ANY" ];
+Property CompletionType As %String(VALUELIST = "ANY,VALUE,TYPE,FUNCTION,IDENTIFIER,RESOURCE,LITERALTYPE,OPERATOR,NONE") [ InitialExpression = "RESOURCE" ];
 
 Property CompletionScope As %String(VALUELIST = "ALL,DIRECT,CHILD");
 

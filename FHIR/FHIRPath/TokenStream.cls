@@ -22,6 +22,14 @@ Method %OnNew(pInput As %String) As %Status
 	For i=1:1:output {
 		#dim token As HS.FHIRPath.Token
 		Set token = output(i)
+
+		/// These units are special units in FHIRPath and can be used without strings
+		Set specialUnits = $lb("year", "years", "month", "months", "week", "weeks", "day", "days", "hour", "hours", "minute", "minutes", "second", "seconds", "millisecond", "milliseconds")
+		If $LF(specialUnits, token.opName) {
+			Set token.literalType = "STRING"
+			Set token.idName = token.opName
+			Set token.opName = ""
+		}
 		If token.opName '= "" {
 			Set opType = $CASE(token.opName,
 			".":"DOT",
