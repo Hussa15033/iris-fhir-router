@@ -179,12 +179,12 @@ Method CreateScope(pIdent As %String, pInitialScope As FHIR.FHIRPath.Context.Sco
 
 		/// If the node doesn't exist as a direct descendant, we check if it exists as a descendant of its type
 		Set typeRef = ..GetTypeRef(pInitialScope.GlobalRef)
-		
+
 		Return:typeRef="" pInitialScope
 
 		Set typeRef = ..AppendSubscript(typeRef, pIdent)
 
-		If $DATA(@typeRef) '= 0 {
+		If (typeRef '= "") && $DATA(@typeRef) {
 			Set scope.GlobalRef = typeRef
 			Set scope.DataType = "FHIRTYPE"
 			Set scope.FHIRType = ..FindPropertyFromRef(typeRef, "type")

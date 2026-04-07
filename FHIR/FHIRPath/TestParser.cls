@@ -51,7 +51,7 @@ ClassMethod RunOneTest(pI, pSearchTerm, pSuggestion, pPackage = "hl7.fhir.r4.cor
 			Set found = ""
 			W " - Exception occurred",!
 
-			Throw:^AFPSOF ##class(%Exception.General).%New("STOP ON FAIL","-11003",,"Stop On Fail clause ran")
+			Throw:^AFPSOF ##class(%Exception.General).%New("STOP ON FAIL","-11003",,"Stop On Fail clause ran for Test#"_pI)
 			Return 0
 		}
 
@@ -68,7 +68,7 @@ ClassMethod RunOneTest(pI, pSearchTerm, pSuggestion, pPackage = "hl7.fhir.r4.cor
 			Write " - Success",!
 			Return 1
 		} Else {
-			Throw:^AFPSOF ##class(%Exception.General).%New("STOP ON FAIL","-11003",,"Stop On Fail clause ran")
+			Throw:^AFPSOF ##class(%Exception.General).%New("STOP ON FAIL","-11004",,"Stop On Fail clause ran for Test#"_pI)
 			Write " - **Failed",!
 			Return 0
 		}
@@ -235,6 +235,8 @@ ClassMethod Test(pDebug = 0, pTestNumber = "", pStopOnFail = 0)
 	Do ..RunOneTest(146, "Observation.component.where(value.as(Quantity).", "!Patient.")
 	Do ..RunOneTest(147, "Observation.value.aggregate(iif($nontexistent.", "!empty()")
 	Do ..RunOneTest(148, "Practitioner.name.family | Practitioner.", "name.")
+	Do ..RunOneTest(149, "Patient.identifier.extension('https://fhir.hl7.org.uk/StructureDefinition/Extension-UKCore-NHSNumberVerificationStatus').value.coding.code=", "'01'", "fhir.r4.ukcore.stu3.currentbuild@0.25.0-pre-release")
+	Do ..RunOneTest(150, "Patient.identifier.extension.where(url='https://fhir.hl7.org.uk/StructureDefinition/Extension-UKCore-NHSNumberVerificationStatus').where(value.coding.code=", "!=", "fhir.r4.ukcore.stu3.currentbuild@0.25.0-pre-release")
 
 	
 	

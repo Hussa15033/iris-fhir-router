@@ -73,11 +73,13 @@ Method Suggest(pScope As FHIR.FHIRPath.Context.Scope) As %ListOfDataTypes
 	#define COP						$$$HasCT("OPERATOR")
 	#define CANY					$$$HasCT("ANY")
 	#define CIDENT					$$$HasCT("IDENTIFIER")
+	#define CPROP					$$$HasCT("PROPERTY")
 	#define CFN						$$$HasCT("FUNCTION")
 	#define CRESOURCE				$$$HasCT("RESOURCE")
 	#define CTYPE					$$$HasCT("TYPE")
 	#define CVAL					$$$HasCT("VALUE")
 	#define CNONE					$$$HasCT("NONE")
+	#define CBOOL					$$$HasCT("BOOLEAN")
 	/// TODO: Clean up the logic within the function to other helper functions and perhaps using basic
 	/// branches, based on how DataType and CompletionType are used
 	/// This type assist engine uses the scope to determine what suggestions to provide
@@ -85,12 +87,13 @@ Method Suggest(pScope As FHIR.FHIRPath.Context.Scope) As %ListOfDataTypes
 
 	Return:$$$CNONE suggestions
 
-	If (pScope.CompletionType = "BOOLEAN") {
+	If $$$CBOOL {
 		/// If the data type is boolean and we're looking for operators
 		Do ..AddBooleanOperators(suggestions)
+		Return suggestions
 	}
 
-	If (pScope.DataType = "FHIRTYPE") {
+	If ($$$CPROP) {
 		Do ..AddEqualityOperators(suggestions)
 
 		Set comparisonTypes = $lb("integer","decimal","Quantity","date","dateTime","time","string")
@@ -106,7 +109,7 @@ Method Suggest(pScope As FHIR.FHIRPath.Context.Scope) As %ListOfDataTypes
 		}
 	}
 
-	If (pScope.CompletionType = "FUNCTION") || $$$CANY {
+	If $$$CFN || $$$CANY {
 		/// If we're looking for functions or operators, we add comparison operators and functions
 		Do ..AddFunctions(suggestions)
 
@@ -122,6 +125,7 @@ Method Suggest(pScope As FHIR.FHIRPath.Context.Scope) As %ListOfDataTypes
 
 		For i=1:1:$LL(desc) {
 			Set cardinality = ctxHelper.FindCardinalityFromRef($LG(desc, i))
+
 			Do suggestions.Insert(ctxHelper.GetFieldDisplayName($LG(desc, i)) _ ".")
 
 			If (cardinality = "*") {
@@ -131,7 +135,7 @@ Method Suggest(pScope As FHIR.FHIRPath.Context.Scope) As %ListOfDataTypes
 	}
 
 	/// TODO: Make appropriate use of pScope.CompletionScope below
-	If (($$$CIDENT) || ($$$CANY)) && (pScope.DataType = "FHIRTYPE") {
+	If (($$$CIDENT) || ($$$CANY) || ($$$CPROP)) && (pScope.DataType = "FHIRTYPE") {
 		/// TODO: We don't need a context helper, but only used so we have access to the FindImmediateDescendants function
 		Set ctxHelper = ##class(FHIR.FHIRPath.FHIRContextHelper).%New(..Loader, "Patient")
 		Set ref = pScope.GlobalRef
@@ -148,6 +152,12 @@ Method Suggest(pScope As FHIR.FHIRPath.Context.Scope) As %ListOfDataTypes
 		}
 		For i=1:1:$LL(suggestions2) {
 			Do suggestions.Insert(ctxHelper.GetFieldDisplayName($LG(suggestions2, i)) _ suffix)
+
+			Set cardinality = ctxHelper.FindCardinalityFromRef($LG(suggestions2, i))
+
+			If (cardinality = "*") {
+				Do suggestions.Insert(ctxHelper.GetFieldDisplayName($LG(suggestions2, i)) _ "[")
+			}
 		}
 
 		Do suggestions.Insert("iif(")
@@ -167,7 +177,7 @@ Method Suggest(pScope As FHIR.FHIRPath.Context.Scope) As %ListOfDataTypes
 		/// rather than on other fields, needs to be investigated mroe to see if
 		/// system/code are the only relevant fields with valuesets and codesystems
 
-		If (pScope.LastField = "code") {
+		If (pScope.PrefixToken = "code") {
 			/// TODO: For codes, we should check sibling properties, although
 			/// might be better to check for "system" (see above)
 			Set parentRef = ctxHelper.AscendSubscript(pScope.GlobalRef)
@@ -177,6 +187,7 @@ Method Suggest(pScope As FHIR.FHIRPath.Context.Scope) As %ListOfDataTypes
 			Set children = $lb(pScope.GlobalRef)
 		}
 
+		Set originalSystems = ctxHelper.FindProperty(pScope.Context, "system")
 		Set systems = ""
 
 		Set suggestions2 = ""
@@ -191,7 +202,12 @@ Method Suggest(pScope As FHIR.FHIRPath.Context.Scope) As %ListOfDataTypes
 			Set systems = systems _ valueSets _ fixedValues
 			Set suggestions2 = suggestions2 _ fixedValues
 		}
-	
+
+		Set codeSystems = ctxHelper.FindProperty(pScope.Context, "system")
+		Set codeURLs = ctxHelper.FindProperty(pScope.Context, "url")
+
+		Set systems = systems _ codeSystems _ codeURLs
+
 		Do ..ExpandSystems(systems, .suggestions2)
 
 		For i=1:1:$LL(suggestions2) {

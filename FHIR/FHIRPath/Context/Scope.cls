@@ -10,9 +10,11 @@ Class FHIR.FHIRPath.Context.Scope Extends %RegisteredObject
 /// 	- CompletionType: "RESOURCE"
 /// 	- All other vars are null/empty
 /// 
+/// 
+/// TODO: DataType should be a list not a string.
 Property DataType As %String(VALUELIST = "NONE,RESOURCE,FHIRTYPE,BOOLEAN,STRING,INTEGER,LITERAL,UNKNOWN");
 
-Property CompletionType As %String(VALUELIST = "ANY,VALUE,TYPE,FUNCTION,IDENTIFIER,RESOURCE,LITERALTYPE,OPERATOR,NONE") [ InitialExpression = "RESOURCE" ];
+Property CompletionType As %String(VALUELIST = "ANY,VALUE,TYPE,FUNCTION,PROPERTY,RESOURCE,LITERALTYPE,OPERATOR,NONE") [ InitialExpression = "RESOURCE" ];
 
 Property CompletionScope As %String(VALUELIST = "ALL,DIRECT,CHILD");
 
@@ -22,13 +24,18 @@ Property Cardinality As %Integer [ InitialExpression = 1 ];
 
 Property ScopedVariables As %List;
 
+/// Rename PrefixToken to Prefix
 Property PrefixToken As %String;
 
 Property GlobalRef As %String;
 
 Property Function As %String;
 
+/// Rename LastField to LastToken
 Property LastField As %String;
+
+/// List of property:value splits
+Property Context As %List;
 
 /// Reference to the resource global
 Property RootRef As %String;
@@ -58,6 +65,7 @@ Method Duplicate()
 	Set dupe.CompletionScope = ..CompletionScope
 	Set dupe.RootRef = ..RootRef
 	Set dupe.LastField = ..LastField
+	Set dupe.Context = ..Context
 	Return dupe
 }
 
@@ -73,6 +81,16 @@ Method Reset()
 	Set ..PrefixToken = ""
 	Set ..CompletionScope = ""
 	Set ..LastField = ""
+	Set ..Context = ""
+}
+
+Method ContextSet(pVal) As %Status
+{
+	If '$LISTVALID(pVal) && (pVal '= "") {
+		Set pVal = $lb(pVal)
+	}
+
+	Set i%Context = pVal
 }
 
 Method FHIRTypeSet(pVal) As %Status
