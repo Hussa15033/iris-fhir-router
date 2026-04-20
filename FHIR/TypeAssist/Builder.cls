@@ -13,6 +13,18 @@ ClassMethod Load(pLoader As HS.FHIRMeta.Load.NpmLoader)
 	Return ..%New(pLoader)
 }
 
+/// Finds the package id given a resource URL
+/// from the package id list
+Method FindPackageByURL(pUrl As %String) As %String [Private] {
+	Set SQL = "SELECT packageId FROM HS_FHIRMeta_Storage.Rsrc where (packageId %INLIST ?) and url = ?"
+	Set tRS = ##class(%SQL.Statement).%ExecDirectNoPrivNoAudit(,SQL, ..Loader.packageIdList, pUrl)
+	if tRS.%Next() {
+		Return tRS.%Get("packageId")
+	}
+
+	Throw ##class(%Exception.General).%New("Resource URL not found in package list","-34222",,"URL '" _ pUrl _ "' was not found in the package id list")
+}
+
 Method %OnNew(pLoader As HS.FHIRMeta.Load.NpmLoader) As %Status
 {
 	Set ..Loader = pLoader
@@ -82,7 +94,8 @@ Method LoadValueSets()
 			}
 
 			If (data '= "") {
-				Set gRef = ..AppendSubscript("^FHIR.TypeAssist", $lb("Data", json.url))
+				Set package = ..FindPackageByURL(json.url)
+				Set gRef = ..AppendSubscript("^FHIR.TypeAssist", $lb("Data", json.url, package))
 				Set @gRef = data
 			}
 		}
@@ -95,7 +108,14 @@ Method LoadCodeSystems()
 	/// use the built in expand operation
 	Set vsLoader = ##class(HS.FHIRMeta.Load.ValueSets).%New(..Loader)
 
-	Merge ^FHIR.TypeAssist("Data") = vsLoader.codeSystems
+	/// We want to store all code systems with their package ids
+	Set i = ""
+	For {
+		Set i = $O(vsLoader.codeSystems(i))
+		Quit:i=""
+		Set package = ..FindPackageByURL(i)
+		Set ^FHIR.TypeAssist("Data", i, package) = $G(vsLoader.codeSystems(i))
+	}
 }
 
 Method GetPkgIdForURL(pUrl As %String)
