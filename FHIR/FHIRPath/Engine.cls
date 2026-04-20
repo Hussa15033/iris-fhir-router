@@ -64,6 +64,10 @@ Method AddStringFunctions(pSuggestions As %ListOfDataTypes) [ Private ]
 	Do pSuggestions.Insert("indexOf(")
 }
 
+Method AddStringOperators(pSuggestions As %ListOfDataTypes) [Private] {
+	Do pSuggestions.Insert("&")
+}
+
 /// TODO: The prefix should be used to filter suggestions before returning them,
 /// rather than returning all suggestions and filtering in the caller
 Method Suggest(pScope As FHIR.FHIRPath.Context.Scope) As %ListOfDataTypes
@@ -93,7 +97,7 @@ Method Suggest(pScope As FHIR.FHIRPath.Context.Scope) As %ListOfDataTypes
 		Return suggestions
 	}
 
-	If ($$$CPROP) {
+	If ($$$COP) {
 		Do ..AddEqualityOperators(suggestions)
 
 		Set comparisonTypes = $lb("integer","decimal","Quantity","date","dateTime","time","string")
@@ -163,8 +167,14 @@ Method Suggest(pScope As FHIR.FHIRPath.Context.Scope) As %ListOfDataTypes
 		Do suggestions.Insert("iif(")
 	}
 
-	If ($$$CIDENT || $$$CANY || $$$CFN) && ($LF(pScope.FHIRType, "string") || $LF(pScope.FHIRType, "code") || (pScope.DataType = "STRING")) {
-		Do ..AddStringFunctions(suggestions)
+	If ($LF(pScope.FHIRType, "string") || $LF(pScope.FHIRType, "code") || (pScope.DataType = "STRING")) {
+		If (($$$CIDENT || $$$CANY || $$$CFN)) {
+			Do ..AddStringFunctions(suggestions)
+		}
+
+		If ($$$CANY || $$$COP) {
+			Do ..AddStringOperators(suggestions)
+		}
 	}
 
 	If ($$$CVAL) {
@@ -262,26 +272,36 @@ Method Suggest(pScope As FHIR.FHIRPath.Context.Scope) As %ListOfDataTypes
 Method ExpandSystems(systems As %List, Output codes As %List = "") [ Private ]
 {
 	For i=1:1:$LL(systems) {
-		Set s = $LG(systems, i)
+		Set url = $LG(systems, i)
 
-		/// Remove version number
-		Set s = $PIECE(s, "|")
+		If ('$DATA(^FHIR.TypeAssist("Data", url))) {
+			Set general = $PIECE(url, "|")
 
-		Set hasData = $DATA(^FHIR.TypeAssist("Data", s))
-		Continue:'hasData
+			If ($DATA(^FHIR.TypeAssist("Data", general))) {
+				Set url = general
+			} Else {
+				Continue
+			}
+		}
 
-		Set data = ^FHIR.TypeAssist("Data", s)
+		For i=1:1:$LL(..Loader.packageIdList) {
+			Set pkg = $LG(..Loader.packageIdList, i)
+			Set data = $G(^FHIR.TypeAssist("Data", url, pkg))
+			Continue:data=""
 
-		For j=1:1:$LL(data) {
-			Set value = $LG(data, j)
-			Set type = $PIECE(value, ":", 1)
+			Set data = ^FHIR.TypeAssist("Data", url, pkg)
 
-			If (type = value) || (type = "code") {
-				/// This is most likely a code
-				Set codes = codes _ $lb(value)
-			} ElseIf (type = "cs") || (type = "vs") {
-				/// This is a code system or another valueset, call recursively
-				Do ..ExpandSystems($lb($PIECE(value, ":", 2, *)), .codes)
+			For j=1:1:$LL(data) {
+				Set value = $LG(data, j)
+				Set type = $PIECE(value, ":", 1)
+
+				If (type = value) || (type = "code") {
+					/// This is most likely a code
+					Set codes = codes _ $lb(value)
+				} ElseIf (type = "cs") || (type = "vs") {
+					/// This is a code system or another valueset, call recursively
+					Do ..ExpandSystems($lb($PIECE(value, ":", 2, *)), .codes)
+				}
 			}
 		}
 	}

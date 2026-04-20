@@ -217,7 +217,7 @@ Method CreateScope(pIdent As %String, pInitialScope As FHIR.FHIRPath.Context.Sco
 	} Catch ex {
 		/// Were not successful in loading a new resource, which means the resource does not exist
 		/// or it may be a prefix, add the scope to search resources
-		Do $System.OBJ.DisplayError(ex.AsStatus())
+		#; Do $System.OBJ.DisplayError(ex.AsStatus())
 		Set success = 0
 	}
 
@@ -395,7 +395,7 @@ Method InferType(pNode As FHIR.FHIRPath.Expr.Expression, pScope As FHIR.FHIRPath
 				Set pScope.PrefixToken = ""
 
 				Set pScope.CompletionScope = "DIRECT"
-				Set pScope.CompletionType = "PROPERTY"
+				Set pScope.CompletionType = "PROPERTY,OPERATOR"
 
 				Return pScope
 
@@ -450,7 +450,7 @@ Method InferType(pNode As FHIR.FHIRPath.Expr.Expression, pScope As FHIR.FHIRPath
 		Set scope.PrefixToken = ""
 		Set scope.DataType = "STRING"
 		Set scope.FHIRType = ""
-		Set scope.CompletionType = "NONE"
+		Set scope.CompletionType = "OPERATOR"
 		Set scope.CompletionScope = "DIRECT"
 		Set scope.LastField = pNode.Value
 
