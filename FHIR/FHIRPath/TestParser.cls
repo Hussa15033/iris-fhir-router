@@ -243,7 +243,8 @@ ClassMethod Test(pDebug = 0, pTestNumber = "", pStopOnFail = 0)
 	Do ..RunOneTest(154, "", "Account.")
 
 	
-	
+	/// Kill debugging flag after tests have ran
+	Kill ^AFPDEBUG
 	
 	Set percentPassed = $NUMBER((^AFPTestsSuccess / ^AFPTests) * 100, 1)
 	Write !,"Tests passed: " _ ^AFPTestsSuccess _ " / " _ ^AFPTests _ "(" _ percentPassed _ "%)",!
