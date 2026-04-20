@@ -69,9 +69,23 @@ ClassMethod RunOneTest(pI, pSearchTerm, pSuggestion, pPackage = "hl7.fhir.r4.cor
 			Return 1
 		} Else {
 			Throw:^AFPSOF ##class(%Exception.General).%New("STOP ON FAIL","-11004",,"Stop On Fail clause ran for Test#"_pI)
-			Write " - **Failed",!
+			Write ..ColourText(" - **Failed", "red"),!
 			Return 0
 		}
+}
+
+ClassMethod ColourText(pText As %String, pColour As %String = "black") As %String
+{
+	Set cCode = $CASE(
+		pColour,
+		"red":"31",
+		"green":"32",
+		"black":"30",
+		"blue":"34",
+		1:"30"
+	)
+
+	Return $c(27) _ "[" _ cCode _ "m" _ pText _ $c(27) _ "[m"
 }
 
 ClassMethod Test(pDebug = 0, pTestNumber = "", pStopOnFail = 0)
