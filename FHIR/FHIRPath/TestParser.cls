@@ -237,6 +237,10 @@ ClassMethod Test(pDebug = 0, pTestNumber = "", pStopOnFail = 0)
 	Do ..RunOneTest(148, "Practitioner.name.family | Practitioner.", "name.")
 	Do ..RunOneTest(149, "Patient.identifier.extension('https://fhir.hl7.org.uk/StructureDefinition/Extension-UKCore-NHSNumberVerificationStatus').value.coding.code=", "'01'", "fhir.r4.ukcore.stu3.currentbuild@0.25.0-pre-release")
 	Do ..RunOneTest(150, "Patient.identifier.extension.where(url='https://fhir.hl7.org.uk/StructureDefinition/Extension-UKCore-NHSNumberVerificationStatus').where(value.coding.code=", "!=", "fhir.r4.ukcore.stu3.currentbuild@0.25.0-pre-release")
+	Do ..RunOneTest(151, "name.", "!!=", "fhir.r4.ukcore.stu3.currentbuild@0.25.0-pre-release", "Patient")
+	Do ..RunOneTest(152, "na", "name.",, "Patient")
+	Do ..RunOneTest(153, "", "!Account.",, "Patient")
+	Do ..RunOneTest(154, "", "Account.")
 
 	
 	
