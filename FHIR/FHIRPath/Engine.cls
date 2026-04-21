@@ -113,7 +113,7 @@ Method Suggest(pScope As FHIR.FHIRPath.Context.Scope) As %ListOfDataTypes
 		Do ..AddEqualityOperators(suggestions)
 
 	
-		Set hasComparisonTypes = ..HasComparisonType($LISTFROMSTRING(pScope.FHIRType))
+		Set hasComparisonTypes = ..HasComparisonType(pScope.FHIRType)
 
 		If (hasComparisonTypes) {
 			Do ..AddComparisonOperators(suggestions)
@@ -168,7 +168,7 @@ Method Suggest(pScope As FHIR.FHIRPath.Context.Scope) As %ListOfDataTypes
 	}
 
 	/// TODO: Make appropriate use of pScope.CompletionScope below
-	If (($$$CPROP) || ($$$CANY) || ($$$CPROP)) && (pScope.DataType = "FHIRTYPE") {
+	If (($$$CPROP) || ($$$CANY)) && (pScope.DataType = "FHIRTYPE") {
 		/// TODO: We don't need a context helper, but only used so we have access to the FindImmediateDescendants function
 		Set refs = pScope.GlobalRefs
 
@@ -201,9 +201,6 @@ Method Suggest(pScope As FHIR.FHIRPath.Context.Scope) As %ListOfDataTypes
 	}
 
 	If ($$$CVAL) {
-		/// Create a generic context helper up above.
-		Set ctxHelper = ##class(FHIR.FHIRPath.FHIRContextHelper).%New(..Loader, "Patient")
-
 		/// TODO: This is a bit of a hacky way of differentiating value suggestions from
 		/// codes, which may include the system property, and other fields.
 		/// May be a better idea to filter on the "code" and "system" siblings directly
@@ -212,34 +209,40 @@ Method Suggest(pScope As FHIR.FHIRPath.Context.Scope) As %ListOfDataTypes
 
 		Set children = pScope.GlobalRefs
 		If (pScope.PrefixToken = "code") {
-			/// TODO: For codes, we should check sibling properties, although
+			/// TODO: For codes, we should check sibling pro	perties, although
 			/// might be better to check for "system" (see above)
 			Set parentRefs = ""
 			For i=1:1:$LL(pScope.GlobalRefs) {
-				Set parentRefs = parentRefs _ ctxHelper.AscendSubscript(pScope.GlobalRef)
+				Set parentRefs = parentRefs _ ##class(Utils).AscendSubscript($LG(pScope.GlobalRefs, i))
 			}
 
 			Set children = ##class(Utils).FindImmediateDescendants(parentRefs)
 		}
 
-		Set originalSystems = ctxHelper.FindProperty(pScope.Context, "system")
+		Set originalSystems = ##class(Utils).FindProperty(pScope.Context, "system")
 		Set systems = ""
 
 		Set suggestions2 = ""
+
+		Set valueSets = ##class(Utils).FindPropertyFromRefs(children, "vs")
+		Set fixedValues = ##class(Utils).FindPropertyFromRefs(children, "fv")
+
+		Set systems = systems _ valueSets _ fixedValues
+		Set suggestions2 = fixedValues
 
 		For i=1:1:$LL(children) {
 			Set ref = $LG(children, i)
 
 			/// Look up details of the ValueSets according to the current ref
-			Set valueSets = ctxHelper.FindPropertyFromRef(ref, "vs")
-			Set fixedValues = ctxHelper.FindPropertyFromRef(ref, "fv")
+			Set valueSets = ##class(Utils).FindProperty(@ref, "vs")
+			Set fixedValues = ##class(Utils).FindProperty(@ref, "fv")
 
 			Set systems = systems _ valueSets _ fixedValues
 			Set suggestions2 = suggestions2 _ fixedValues
 		}
 
-		Set codeSystems = ctxHelper.FindProperty(pScope.Context, "system")
-		Set codeURLs = ctxHelper.FindProperty(pScope.Context, "url")
+		Set codeSystems = ##class(Utils).FindProperty(pScope.Context, "system")
+		Set codeURLs = ##class(Utils).FindProperty(pScope.Context, "url")
 
 		Set systems = systems _ codeSystems _ codeURLs
 
@@ -296,6 +299,7 @@ Method Suggest(pScope As FHIR.FHIRPath.Context.Scope) As %ListOfDataTypes
 
 Method ExpandSystems(systems As %List, Output codes As %List = "") [ Private ]
 {
+	Set checkedSystems = ""
 	For i=1:1:$LL(systems) {
 		Set url = $LG(systems, i)
 
@@ -308,6 +312,8 @@ Method ExpandSystems(systems As %List, Output codes As %List = "") [ Private ]
 				Continue
 			}
 		}
+
+		Quit:$LF(checkedSystems, url)
 
 		For i=1:1:$LL(..Loader.packageIdList) {
 			Set pkg = $LG(..Loader.packageIdList, i)
@@ -329,6 +335,8 @@ Method ExpandSystems(systems As %List, Output codes As %List = "") [ Private ]
 				}
 			}
 		}
+
+		Set checkedSystems = checkedSystems _ $lb(url)
 	}
 
 	Return ""

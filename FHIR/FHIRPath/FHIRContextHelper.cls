@@ -123,33 +123,47 @@ Method CreateScope(pIdent As %String, pInScope As FHIR.FHIRPath.Context.Scope, B
 			Return scope
 		}
 	} ElseIf (pInScope.DataType = "") {
+		Quit:pIdent=""
+
+		w !,!,!
+		zw pIdent
 		/// This scope is a blank slate, we are not constricting ourselves to any particular resource/type
 		/// Find the Type/Resource within the TypeAssist global
 		Set base = "^FHIR.TypeAssist"
-		Set corePkg = $LG(..Loader.packageIdList)
-		Set base = ##class(Utils).AppendSubscript(base, corePkg)
-		Set baseType = ##class(Utils).AppendSubscript(base, $lb("Type", pIdent))
 
-		Set baseResource = ##class(Utils).AppendSubscript(base, $lb("Resource", pIdent))
+		Set baseResourceGlobalRefs = ""
+		Set baseTypeGlobalRefs = ""
+
+		For i=1:1:$LL(..Loader.packageIdList) {
+			Set pkg = $LG(..Loader.packageIdList, i)
+			Set resourceRef = ##class(Utils).AppendSubscript(base, $lb(pkg, "Resource", pIdent))
+
+			If ($DATA(@resourceRef)) {
+				Set baseResourceGlobalRefs = baseResourceGlobalRefs _ $lb(##class(Utils).DescendSubscript(resourceRef))
+			}
+
+			Set typeRef = ##class(Utils).AppendSubscript(base, $lb(pkg, "Type", pIdent))
+			If ($DATA(@typeRef)) {
+				Set baseTypeGlobalRefs = baseTypeGlobalRefs _ $lb(##class(Utils).DescendSubscript(typeRef))
+			}
+		}
 		
-		Quit:pIdent=""
-		
-		If ($DATA(@baseResource)) {
+		If (baseResourceGlobalRefs '= "") {
 			/// Type is a resource
 			Set scope.Cardinality = 1
 			Set scope.DataType = "RESOURCE"
 			Set scope.FHIRType = pIdent
-			Set scope.GlobalRefs = ##class(Utils).DescendSubscript(baseResource)
+			Set scope.GlobalRefs = baseResourceGlobalRefs
 			Set scope.RootRef = scope.GlobalRefs
 
 			Set success = 1
 			Return scope
-		} ElseIf ($DATA(@baseType)) {
+		} ElseIf (baseTypeGlobalRefs '= "") {
 			/// Type is a FHIR Type
 			Set scope.Cardinality = 1
 			Set scope.DataType = "FHIRTYPE"
 			Set scope.FHIRType = pIdent
-			Set scope.GlobalRefs = ##class(Utils).DescendSubscript(baseType)
+			Set scope.GlobalRefs = baseTypeGlobalRefs
 
 			Set success = 1
 			Return scope

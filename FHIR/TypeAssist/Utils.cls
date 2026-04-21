@@ -50,7 +50,7 @@ ClassMethod GetFieldDisplayName(pGlobalRef As %String) As %String
 
 /// Given a list of properties as key:value, returns ones where
 /// key = pPropName
-ClassMethod FindProperty(pPropList As %List, pPropName As %String) As %List [ Private ]
+ClassMethod FindProperty(pPropList As %List, pPropName As %String) As %List
 {
 	Set list = ""
 	For i=1:1:$LL(pPropList) {
@@ -70,7 +70,7 @@ ClassMethod FindProperty(pPropList As %List, pPropName As %String) As %List [ Pr
 
 /// Find a specific property from a (list of) global references
 /// Global 
-ClassMethod FindPropertyFromRefs(pGlobalRefs As %List, pPropName As %String) As %List [Private]
+ClassMethod FindPropertyFromRefs(pGlobalRefs As %List, pPropName As %String) As %List
 {
 	Return:pGlobalRefs="" ""
 	Set refs = pGlobalRefs

@@ -346,7 +346,11 @@ Method InferType(pNode As FHIR.FHIRPath.Expr.Expression, pScope As FHIR.FHIRPath
 					/// This is a valid type for this field, cast as this type
 					/// and move the context to a subfield if this was a
 					/// choice field
-					Set tScope.GlobalRef = ..ContextHelper.AscendSubscript(tScope.GlobalRef)
+					Set tempRefs = ""
+					For i=1:1:$LL(tScope.GlobalRefs) {
+						Set tempRefs = tempRefs _ $lb(##class(FHIR.TypeAssist.Utils).AscendSubscript($LG(tScope.GlobalRefs, i)))
+					}
+					Set tScope.GlobalRefs = tempRefs
 					Set nScope = ..CreateScope(tScope.LastField _ type, tScope, .success)
 
 					Set:success tScope = nScope
