@@ -145,7 +145,9 @@ Method Suggest(pScope As FHIR.FHIRPath.Context.Scope) As %ListOfDataTypes
 		If (pScope.Cardinality = 1) {
 			Do ..AddBooleanFunctions(suggestions)
 		}
+	}
 
+	If ($$$CANY) || (pScope.DataType = "") {
 		Do ..AddBooleanIdentifiers(suggestions)
 	}
 

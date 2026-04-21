@@ -398,30 +398,30 @@ Method InferType(pNode As FHIR.FHIRPath.Expr.Expression, pScope As FHIR.FHIRPath
 				Return scope
 			} ElseIf (pNode.Callee.Name = "as") {
 				/// Try to cast/infer type
-				Do ..InferType(pNode.Args.GetAt(1), pScope)
+				Set tScope = ..InferType(pNode.Args.GetAt(1), pScope)
 
 				/// For choice fields, attempt to create a scope
-				Set type = pScope.PrefixToken
+				Set type = tScope.PrefixToken
 				
 				/// TODO: Odd way of doing this, should perform this at the stage of setting the FHIRType,
 				/// not here
-				If ($LF($LISTFROMSTRING($LISTTOSTRING(pScope.FHIRType)), type)) {
+				If ($LF($LISTFROMSTRING($LISTTOSTRING(tScope.FHIRType)), type)) {
 					/// This is a valid type for this field, cast as this type
 					/// and move the context to a subfield if this was a
 					/// choice field
-					Set pScope.GlobalRef = ..ContextHelper.AscendSubscript(pScope.GlobalRef)
-					Set nScope = ..CreateScope(pScope.LastField _ type, pScope, .success)
+					Set tScope.GlobalRef = ..ContextHelper.AscendSubscript(tScope.GlobalRef)
+					Set nScope = ..CreateScope(tScope.LastField _ type, tScope, .success)
 
-					Set:success pScope = nScope
+					Set:success tScope = nScope
 				}
 
 				/// Consume the token regardless of if this type was valid
-				Set pScope.PrefixToken = ""
+				Set tScope.PrefixToken = ""
 
-				Set pScope.CompletionScope = "DIRECT"
-				Set pScope.CompletionType = "PROPERTY,OPERATOR"
+				Set tScope.CompletionScope = "DIRECT"
+				Set tScope.CompletionType = "PROPERTY,OPERATOR"
 
-				Return pScope
+				Return tScope
 
 			} ElseIf (pNode.Callee.Name = "where") {
 
