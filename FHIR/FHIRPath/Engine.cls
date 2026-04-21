@@ -51,7 +51,7 @@ Method AddFunctions(pSuggestions As %ListOfDataTypes) [ Private ]
 	Do pSuggestions.Insert("union(")
 }
 
-Method AddBooleanFunctions(pSuggestions As %ListOfDataTypes) [ Private ]
+Method AddBooleanSingletonFunctions(pSuggestions As %ListOfDataTypes) [ Private ]
 {
 	Do pSuggestions.Insert("not()")
 }
@@ -93,9 +93,6 @@ Method Suggest(pScope As FHIR.FHIRPath.Context.Scope) As %ListOfDataTypes
 	#define HasCT(%a)				$LF(completionTypes, %a)
 	#define COP						$$$HasCT("OPERATOR")
 	#define CANY					$$$HasCT("ANY")
-
-	/// Note: $$$CIDENT is deprecated in favour of $$$CPROP
-	#define CIDENT					$$$HasCT("IDENTIFIER")
 	#define CPROP					$$$HasCT("PROPERTY")
 	#define CFN						$$$HasCT("FUNCTION")
 	#define CRESOURCE				$$$HasCT("RESOURCE")
@@ -110,6 +107,7 @@ Method Suggest(pScope As FHIR.FHIRPath.Context.Scope) As %ListOfDataTypes
 
 	Return:$$$CNONE suggestions
 
+	Set ctxHelper = ##class(FHIR.TypeAssist.FHIRContextHelper).%New(..Loader)
 
 	If ($$$COP) {
 		Do ..AddEqualityOperators(suggestions)
@@ -132,8 +130,14 @@ Method Suggest(pScope As FHIR.FHIRPath.Context.Scope) As %ListOfDataTypes
 
 	/// TODO#3ERL: We need a consistent way of representing data stored in the scope. Use DataType="FHIRType" and
 	/// FHIRType = "boolean" | "string" | ...
-	If (pScope.DataType = "BOOLEAN") && ($$$CANY || $$$COP) {
-		Do ..AddBooleanOperators(suggestions)
+	If ($LF(pScope.FHIRType, "boolean")) {
+		If (($$$CANY || $$$COP)) {
+			Do ..AddBooleanOperators(suggestions)
+		}
+
+		If (($$$CANY || $$$CFN)) {
+			Do ..AddBooleanSingletonFunctions(suggestions)
+		}
 
 		Return suggestions
 	}
@@ -141,10 +145,6 @@ Method Suggest(pScope As FHIR.FHIRPath.Context.Scope) As %ListOfDataTypes
 	If $$$CFN || $$$CANY {
 		/// If we're looking for functions or operators, we add comparison operators and functions
 		Do ..AddFunctions(suggestions)
-
-		If (pScope.Cardinality = 1) {
-			Do ..AddBooleanFunctions(suggestions)
-		}
 	}
 
 	If ($$$CANY) || (pScope.DataType = "") {
@@ -153,31 +153,29 @@ Method Suggest(pScope As FHIR.FHIRPath.Context.Scope) As %ListOfDataTypes
 
 	If (pScope.DataType = "RESOURCE") && (pScope.FHIRType'="") && ($LL(pScope.FHIRType) = 1) {
 		/// Find all properties of this resource type
-		Set ctxHelper = ##class(FHIR.FHIRPath.FHIRContextHelper).%New(..Loader, $LG(pScope.FHIRType, 1))
-		Set desc = ctxHelper.FindImmediateDescendants(ctxHelper.GlobalRef)
+		Set desc = ##class(Utils).FindImmediateDescendants(pScope.GlobalRefs)
 
 		For i=1:1:$LL(desc) {
-			Set cardinality = ctxHelper.FindCardinalityFromRef($LG(desc, i))
+			Set ref = $LG(desc, i)
+			Set cardinality = ##class(Utils).FindMaxCardinality(ref)
 
-			Do suggestions.Insert(ctxHelper.GetFieldDisplayName($LG(desc, i)) _ ".")
+			Do suggestions.Insert(ctxHelper.GetFieldDisplayName(ref) _ ".")
 
 			If (cardinality = "*") {
-				Do suggestions.Insert(ctxHelper.GetFieldDisplayName($LG(desc, i)) _ "[")
+				Do suggestions.Insert(ctxHelper.GetFieldDisplayName(ref) _ "[")
 			}
 		}
 	}
 
 	/// TODO: Make appropriate use of pScope.CompletionScope below
-	If (($$$CIDENT) || ($$$CANY) || ($$$CPROP)) && (pScope.DataType = "FHIRTYPE") {
+	If (($$$CPROP) || ($$$CANY) || ($$$CPROP)) && (pScope.DataType = "FHIRTYPE") {
 		/// TODO: We don't need a context helper, but only used so we have access to the FindImmediateDescendants function
-		Set ctxHelper = ##class(FHIR.FHIRPath.FHIRContextHelper).%New(..Loader, "Patient")
-		Set ref = pScope.GlobalRef
+		Set refs = pScope.GlobalRefs
 
-		Set suggestions2 = ""
-		Set suggestions2 = ctxHelper.FindImmediateDescendants(ref)
+		Set suggestions2 = ##class(Utils).FindImmediateDescendants(refs)
 
 		/// Now find descendants of its type
-		Set suggestions2 = suggestions2 _ ctxHelper.FindImmediateDescendants(ctxHelper.GetTypeRef(ref))
+		Set suggestions2 = suggestions2 _ ##class(Utils).FindImmediateDescendants(##class(Utils).GetTypeRefsMultiple(refs))
 		Set suffix = ""
 
 		If (pScope.Function = "") || (pScope.Function = "|") {
@@ -186,7 +184,7 @@ Method Suggest(pScope As FHIR.FHIRPath.Context.Scope) As %ListOfDataTypes
 		For i=1:1:$LL(suggestions2) {
 			Do suggestions.Insert(ctxHelper.GetFieldDisplayName($LG(suggestions2, i)) _ suffix)
 
-			Set cardinality = ctxHelper.FindCardinalityFromRef($LG(suggestions2, i))
+			Set cardinality = ##class(Utils).FindMaxCardinality($LG(suggestions2, i))
 
 			If (cardinality = "*") {
 				Do suggestions.Insert(ctxHelper.GetFieldDisplayName($LG(suggestions2, i)) _ "[")
@@ -197,7 +195,7 @@ Method Suggest(pScope As FHIR.FHIRPath.Context.Scope) As %ListOfDataTypes
 	}
 
 	If ($LF(pScope.FHIRType, "string") || $LF(pScope.FHIRType, "code") || (pScope.DataType = "STRING")) {
-		If (($$$CIDENT || $$$CANY || $$$CFN)) {
+		If (($$$CPROP || $$$CANY || $$$CFN)) {
 			Do ..AddStringFunctions(suggestions)
 		}
 	}
@@ -212,14 +210,16 @@ Method Suggest(pScope As FHIR.FHIRPath.Context.Scope) As %ListOfDataTypes
 		/// rather than on other fields, needs to be investigated mroe to see if
 		/// system/code are the only relevant fields with valuesets and codesystems
 
+		Set children = pScope.GlobalRefs
 		If (pScope.PrefixToken = "code") {
 			/// TODO: For codes, we should check sibling properties, although
 			/// might be better to check for "system" (see above)
-			Set parentRef = ctxHelper.AscendSubscript(pScope.GlobalRef)
-			Set children = ctxHelper.FindImmediateDescendants(parentRef)
-		} Else {
-			/// The only node we should check is the current one
-			Set children = $lb(pScope.GlobalRef)
+			Set parentRefs = ""
+			For i=1:1:$LL(pScope.GlobalRefs) {
+				Set parentRefs = parentRefs _ ctxHelper.AscendSubscript(pScope.GlobalRef)
+			}
+
+			Set children = ##class(Utils).FindImmediateDescendants(parentRefs)
 		}
 
 		Set originalSystems = ctxHelper.FindProperty(pScope.Context, "system")

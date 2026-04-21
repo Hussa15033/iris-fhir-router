@@ -14,10 +14,11 @@ Class FHIR.FHIRPath.Context.Scope Extends %RegisteredObject
 /// TODO: DataType should be a list not a string.
 Property DataType As %String(VALUELIST = "NONE,RESOURCE,FHIRTYPE,BOOLEAN,STRING,INTEGER,LITERAL,UNKNOWN");
 
-Property CompletionType As %String(VALUELIST = "ANY,VALUE,TYPE,FUNCTION,PROPERTY,RESOURCE,LITERALTYPE,OPERATOR,NONE") [ InitialExpression = "RESOURCE" ];
+Property CompletionType As %String(VALUELIST = "ANY,VALUE,TYPE,FUNCTION,PROPERTY,RESOURCE,OPERATOR,NONE") [ InitialExpression = "RESOURCE" ];
 
-Property CompletionScope As %String(VALUELIST = "ALL,DIRECT,CHILD");
+Property CompletionScope As %String(VALUELIST = "ALL,DIRECT");
 
+/// TODO: Rename this to FHIRTypes (plural)
 Property FHIRType As %List;
 
 Property Cardinality As %Integer [ InitialExpression = 1 ];
@@ -27,7 +28,7 @@ Property ScopedVariables As %List;
 /// Rename PrefixToken to Prefix
 Property PrefixToken As %String;
 
-Property GlobalRef As %String;
+Property GlobalRefs As %List;
 
 Property Function As %String;
 
@@ -60,7 +61,7 @@ Method Duplicate()
 	Set dupe.Cardinality = ..Cardinality
 	Set dupe.ScopedVariables = ..ScopedVariables
 	Set dupe.CompletionType = ..CompletionType
-	Set dupe.GlobalRef = ..GlobalRef
+	Set dupe.GlobalRefs = ..GlobalRefs
 	Set dupe.Function = ..Function
 	Set dupe.CompletionScope = ..CompletionScope
 	Set dupe.RootRef = ..RootRef
@@ -76,7 +77,7 @@ Method Reset()
 	Set ..Cardinality = 0
 	Set ..ScopedVariables = ""
 	Set ..CompletionType = ""
-	Set ..GlobalRef = ""
+	Set ..GlobalRefs = ""
 	Set ..Function = ""
 	Set ..PrefixToken = ""
 	Set ..CompletionScope = ""
@@ -100,6 +101,15 @@ Method FHIRTypeSet(pVal) As %Status
 	}
 
 	Set i%FHIRType = pVal
+}
+
+Method GlobalRefsSet(pVal) As %Status
+{
+	If '$LISTVALID(pVal) && (pVal '= "") {
+		Set pVal = $lb(pVal)
+	}
+
+	Set i%GlobalRefs = pVal
 }
 
 Method ScopedVariablesSet(pVal) As %Status
