@@ -1,27 +1,51 @@
-///
+/// 
 /// This class is an autocomplete function for FHIRPath.
 /// 
 /// Auwais Hussain (ahussain@intersystems.com)
 /// 
-
 Class FHIR.FHIRPath.Autocomplete Extends %RegisteredObject
 {
 
-Property Resource As %String;
-
+/// TODO: Structure:
+/// FHIR.Autocomplete.Engine - main entry point for autocomplete, contains the Suggest method
+/// FHIR.Autocomplete.Expr - Package containing all expression for AST
+/// FHIR.Autocomplete.TypeAssist.Builder - Loads FHIR metadata and provides methods to access it
+/// FHIR.Autocomplete.Utils - Package/class that helps with utility functions
+/// FHIR.Autocomplete.TypeAssist.InferenceEngine - Inference Engine for working out type
+/// 
+/// Allow registration of FHIRPath functions
+/// - We need to store their:
+/// 	- OutputCardinality
+/// 	- Name
+/// 	- ScopedVariables (list)
+/// 	- OutputType (or a method that modifies the scope based on the input scope)
+/// The name of a resource or "" (empty string)
+/// 
+/// Signatures:
+/// 	empty() : Boolean
+/// 	exists([criteria : ($this, $index) => Boolean]) : Boolean
+/// 	aggregate(aggregator : ($total, $this, $index) => collection [, init : collection]) : collection
 Property ResourceFilter As %String;
 
-Property FHIRVersion As %String [ InitialExpression = "4.0.1" ];
+/// The FHIR Loader to load all metadata once
+Property Loader As HS.FHIRMeta.Load.NpmLoader;
 
-Property Paths As %ListOfDataTypes;
+Property ContextHelper As FHIR.FHIRPath.FHIRContextHelper;
 
-Method %OnNew(pValidResource = "") As %Status
+Method %OnNew(pPackageId = "hl7.fhir.r4.core@4.0.1", pValidResource = "") As %Status
 {
+	Set ..Loader = ##class(HS.FHIRMeta.Load.NpmLoader).Load($lb(pPackageId))
 	Set ..ResourceFilter = pValidResource
 	Quit $$$OK
 }
 
-Method InorderTraversal(pExpr As FHIR.FHIRPath.Expr.Expression, ByRef pCtx As FHIR.FHIRPath.FHIRContextHelper, ByRef finalTokenPrefix, ByRef refWithinFunctionCall = 0, withinFunctionCall = 0)
+/// Helper method to convert an operator to it's corresponding function (if applicable)
+Method OpAsFn(pOp As %String)
+{
+	Return $CASE(pOp, "|":"union", :"")
+}
+
+Method InorderTraversal(pExpr As FHIR.FHIRPath.Expr.Expression, ByRef pCtx As FHIR.FHIRPath.FHIRContextHelper, ByRef finalTokenPrefix, ByRef suggestValues, ByRef refWithinFunctionCall = 0, withinFunctionCall = 0)
 {
 	/// Reach a leaf node
 	If (pExpr = "") {
@@ -30,13 +54,31 @@ Method InorderTraversal(pExpr As FHIR.FHIRPath.Expr.Expression, ByRef pCtx As FH
 
 	Set cls = $CLASSNAME(pExpr)
 	If cls = "FHIR.FHIRPath.Expr.BinaryExpr" {
-		Do ..InorderTraversal(pExpr.Left, pCtx, .finalTokenPrefix, .refWithinFunctionCall, withinFunctionCall)
+		Set savedContext = pCtx.Context
+		/// Traverse down the left tree
+		Do ..InorderTraversal(pExpr.Left, .pCtx, .finalTokenPrefix, .suggestValues, .refWithinFunctionCall, withinFunctionCall)
+		
+		Set opFn = ..OpAsFn(pExpr.Op)
+		Do:opFn'="" pCtx.AdvanceContext(opFn, 1)
+		If pExpr.Op = "|" {
+			/// If this is the union operator, we want to merge the context resulting from the RHS
+			/// Instantiate a new Context obj
 
+			/// TODO: Review code, unnecessary - can remove whole IF block?
+			Set leftCtx = ##class(FHIR.FHIRPath.FHIRContextHelper).%New(savedContext)
+			Do ..InorderTraversal(pExpr.Right, leftCtx, .finalTokenPrefix, .suggestValues, .refWithinFunctionCall, withinFunctionCall)
+
+			Do pCtx.MergeContext(leftCtx.Context)
+		}
+
+		/// Suggest values only if the operator is equal to "="
+		Set suggestValues = (pExpr.Op = "=")
+		
 		/// If we successfully advance the operator, it means the operator doubles as both
 		/// a function and operator, so we move within
 		Set opSuccess = pCtx.AdvanceOperator(pExpr.Op)
 		Set:pCtx.AdvanceOperator(pExpr.Op) withinFunctionCall = 1
-		Do ..InorderTraversal(pExpr.Right, pCtx, .finalTokenPrefix, .refWithinFunctionCall, withinFunctionCall)
+		Do ..InorderTraversal(pExpr.Right, .pCtx, .finalTokenPrefix, .suggestValues, .refWithinFunctionCall, withinFunctionCall)
 	} ElseIf cls = "FHIR.FHIRPath.Expr.IdentExpr" {
 		Set finalTokenPrefix = pExpr.Name
 		Set refWithinFunctionCall = withinFunctionCall
@@ -46,80 +88,541 @@ Method InorderTraversal(pExpr As FHIR.FHIRPath.Expr.Expression, ByRef pCtx As FH
 		Set finalTokenPrefix = ""
 		#; Do pCtx.AdvanceContext(pExpr.Value)
 	} ElseIf cls = "FHIR.FHIRPath.Expr.CallExpr" {
-		Do pCtx.AdvanceContext(pExpr.Callee.Name, 1)
-		/// Todo: Need a better way of reverting context after function call
-		Set contextPrior = pCtx.CurrentContext
-		Do ..InorderTraversal(pExpr.Args.GetAt(pExpr.Args.Size), pCtx, .finalTokenPrefix, .refWithinFunctionCall, 1)
-		#; Write "Loading context prior to call: " _ pExpr.Callee.Name
-		
+		/// Duplicate the current context for use within the function
+		Set scopedCtx = pCtx.Duplicate()
+		Do scopedCtx.AdvanceContext(pExpr.Callee.Name, 1)
 
-		/// If the function call is not partial (i.e the function call has a closing ')'),
-		/// then we revert back to the original context
-		Do:pExpr.Partial=0 pCtx.LoadContext(contextPrior)
+		/// We only need to traverse through the last argument to update the context
+
+		Do ..InorderTraversal(pExpr.Args.GetAt(pExpr.Args.Size), .scopedCtx, .finalTokenPrefix, .suggestValues, .refWithinFunctionCall, 1)
+		Set:'pExpr.Partial suggestValues = 0
+
+		/// TODO: Check if the following plays nicely with all types of supported functions....
+		/// If the function call is partial (i.e. the function does not have a closing ')'),
+		/// we want to change the context to the new scoped context
+		Set:pExpr.Partial pCtx = scopedCtx
 	} ElseIf cls = "FHIR.FHIRPath.Expr.IndexExpr" {
-		Do ..InorderTraversal(pExpr.Field, pCtx, .finalTokenPrefix, .refWithinFunctionCall, withinFunctionCall)
+		Do ..InorderTraversal(pExpr.Field, .pCtx, .finalTokenPrefix, .suggestValues, .refWithinFunctionCall, withinFunctionCall)
 	} ElseIf (cls = "FHIR.FHIRPath.Expr.NumberExpr") || (cls = "FHIR.FHIRPath.Expr.DecimalExpr") {
 	} ElseIf (cls = "FHIR.FHIRPath.Expr.StringExpr") {
-		Do pCtx.AdvanceString()
+		#; Do pCtx.AdvanceString()
 	} ElseIf cls = "FHIR.FHIRPath.Expr.UnaryExpr" { 
-		Do ..InorderTraversal(pExpr.Expr, pCtx, .finalTokenPrefix, .refWithinFunctionCall, withinFunctionCall)
+		Do ..InorderTraversal(pExpr.Expr, .pCtx, .finalTokenPrefix, .suggestValues, .refWithinFunctionCall, withinFunctionCall)
 	} Else {
-		Throw ##class(%Exception.General).%New("Unable to handle class " _cls)
+		Throw ##class(%Exception.General).%New("Unable to handle class " _cls, "-33112")
 	}
 
 	Quit
 }
 
-Method Suggest(pExpression As %String) As %ListOfDataTypes
+ClassMethod MarkCursor(pNode As FHIR.FHIRPath.Expr.Expression) As %Boolean
+{
+	Set cls = $CLASSNAME(pNode)
+	If cls = "FHIR.FHIRPath.Expr.BinaryExpr" {
+		Set rightNode = ..MarkCursor(pNode.Right)
+		If rightNode {
+			Set pNode.ContainsCursor = 1
+			Return 1
+		}
+
+		Set leftNode = ..MarkCursor(pNode.Left)
+		If leftNode {
+			Set pNode.ContainsCursor = 1
+			Return 1
+		}
+	} ElseIf (cls = "FHIR.FHIRPath.Expr.IdentExpr") || (cls = "FHIR.FHIRPath.Expr.PartialExpr") {
+		Set pNode.ContainsCursor = 1
+		Return 1
+	} ElseIf cls = "FHIR.FHIRPath.Expr.CallExpr" {
+		Return:pNode.Partial 1
+		Return:pNode.Args.Size=0 0
+		Set pNode.ContainsCursor = ..MarkCursor(pNode.Args.GetAt(pNode.Args.Size))
+		Return pNode.ContainsCursor
+	} ElseIf cls = "FHIR.FHIRPath.Expr.IndexExpr" {
+		Set pNode.ContainsCursor = ..MarkCursor(pNode.Field)
+		Return pNode.ContainsCursor
+	} ElseIf (cls = "FHIR.FHIRPath.Expr.NumberExpr") || (cls = "FHIR.FHIRPath.Expr.DecimalExpr") || (cls = "FHIR.FHIRPath.Expr.StringExpr") || (cls = "FHIR.FHIRPath.Expr.QuantityExpr") {
+		Set pNode.ContainsCursor = 1
+		Return 1
+	} ElseIf cls = "FHIR.FHIRPath.Expr.UnaryExpr" { 
+		Set pNode.ContainsCursor = ..MarkCursor(pNode.Expr)
+		Return pNode.ContainsCursor
+	} Else {
+		Throw ##class(%Exception.General).%New("Unable to handle class " _ cls, "-33113")
+	}
+
+	Return 0
+}
+
+/// This method infers the scope from within a function. Should only be called if the function is not
+/// yet complete
+Method InferFunctionScope(pFnName As %String, pScope As FHIR.FHIRPath.Context.Scope) As FHIR.FHIRPath.Context.Scope
+{
+	Set pScope.Function = pFnName
+	Set pScopedFunctions = $LISTFROMSTRING("exists,all,where,select,iif,aggregate")
+	If $LF(pScopedFunctions, pFnName) {
+		Set pScope.CompletionType = "PROPERTY"
+		Set pScope.ScopedVariables = pScope.ScopedVariables _ $lb("$this", "$index")
+	}
+
+	If (pFnName = "aggregate") {
+		Set pScope.CompletionType = "PROPERTY"
+		Set pScope.ScopedVariables = pScope.ScopedVariables _ $lb("$total", "$this", "$index")
+	} ElseIf (pFnName = "as") {
+		/// Reset scope
+		Set pScope.CompletionType = "TYPE"
+		Set pScope.CompletionScope = "DIRECT"
+	} ElseIf (pFnName = "is") || (pFnName = "ofType") {
+		Set pScope.CompletionType = "TYPE"
+		Set pScope.CompletionScope = "ALL"
+	} ElseIf (pFnName = "union") || (pFnName = "|") {
+		Set pScope.CompletionType = "RESOURCE,PROPERTY"
+		Set pScope.CompletionScope = "DIRECT"
+		Set pScope.GlobalRef = pScope.RootRef
+	} ElseIf (pFnName = "extension") {
+		/// Simulate the expression of a BEXP and CallExpr
+		Set nextScope = ..CreateScope("extension", pScope, .success)
+		Return:'success pScope
+
+		Set nextScope = ..CreateScope("url", nextScope, .success)
+		Return:'success pScope
+
+		Set nextScope.CompletionType = "VALUE"
+		Set nextScope.CompletionScope = "DIRECT"
+
+		Set pScope = nextScope
+	}
+	Return pScope
+}
+
+Method CreateScope(pIdent As %String, pInitialScope As FHIR.FHIRPath.Context.Scope, ByRef success As %Boolean) As FHIR.FHIRPath.Context.Scope
+{
+	/// TODO: Messy way of dealing with context and helpers...
+	/// the goal was to ensure an empty context at the beginning, and allowing the engine
+	/// to determine the context based off the first InferType
+
+	If (..ContextHelper '= "") && (pInitialScope.GlobalRef '= "") {
+		Return ..ContextHelper.CreateScope(pIdent, pInitialScope, .success)
+	}
+
+	Try {
+		Set ctxHelper = ##class(FHIR.FHIRPath.FHIRContextHelper).BuildResourceContext(..Loader, pIdent)
+		Set ..ContextHelper = ctxHelper
+		Set pInitialScope.DataType = "RESOURCE"
+		Set pInitialScope.FHIRType = $lb(pIdent)
+		Set pInitialScope.GlobalRef = ..ContextHelper.GlobalRef
+		Set pInitialScope.RootRef = ..ContextHelper.GlobalRef
+
+		Set nScope = ctxHelper.CreateScope(pIdent, pInitialScope, .success)
+	} Catch ex {
+		/// Were not successful in loading a new resource, which means the resource does not exist
+		/// or it may be a prefix, add the scope to search resources
+		#; Do $System.OBJ.DisplayError(ex.AsStatus())
+		Set success = 0
+	}
+
+	/// If we were not successful in creating a scope, send back the original scope
+	Set:'success nScope = pInitialScope
+	Return nScope
+}
+
+/// Note: We assume left side will never contain cursor
+Method InferType(pNode As FHIR.FHIRPath.Expr.Expression, pScope As FHIR.FHIRPath.Context.Scope) As FHIR.FHIRPath.Context.Scope
+{
+	/// Infer the type of the current node based on the context and the type of expression
+	Set cls = $CLASSNAME(pNode)
+	Set package = $PIECE(cls, ".", 1, *-1)
+	Set name = $PIECE(cls, ".", *)
+
+	If package '= "FHIR.FHIRPath.Expr" {
+		Throw ##class(%Exception.General).%New("Unable to handle package " _ package)
+	}
+
+	Set pScope = pScope.Duplicate()
+
+	If name = "BinaryExpr" {
+		/// We traverse down the left to get the type of the left side
+		/// We pass the scope down to the left side, which will update the scope based on the type of the left side expression
+		/// TODO: pScope becomes mutated ... should NEVER be the case...
+		Set leftScope = ..InferType(pNode.Left, pScope)
+
+		/// Operators that double as functions
+		Set fnOps = $lb("is", "as", "|")
+		Set compOps = $lb(">",">=","<","<=","=","!=")
+		Set boolOps = $lb("and", "or", "implies", "xor")
+
+		If pNode.Op = "." {
+			Set leftScope.CompletionType = "PROPERTY,FUNCTION"
+			Set leftScope.CompletionScope = "DIRECT"
+
+			Set rightInputScope = ..InferType(pNode.Right, leftScope)
+			
+			/// Right scope is empty and does not contain any identifier/prefix, so we suggest based on the left scope
+			If (rightInputScope.DataType = "UNKNOWN") {
+				/// Reset the token prefix set on the left side, as RHS is empty
+				Set leftScope.PrefixToken = ""
+				Return leftScope
+			} ElseIf (rightInputScope.DataType = "STRING") {
+				/// There is a string on the LH
+				/// The completion type is a function
+				Set rightInputScope.CompletionType = "FUNCTION"
+				Set rightInputScope.CompletionScope = "DIRECT"
+			}
+
+			Return rightInputScope
+		} ElseIf ((pNode.Op = "=") || (pNode.Op = "!=")) {
+			Set rightScope = ..InferType(pNode.Right, leftScope)
+
+			Set newContext = ""
+			If rightScope.DataType = "UNKNOWN" {
+				/// The RHS does not have any data within it, the cursor is here
+				Set leftScope.CompletionType = "VALUE"
+				Set leftScope.CompletionScope = "ALL"
+				Set leftScope.PrefixToken = ""
+
+				Return leftScope
+			} ElseIf (rightScope.DataType = "STRING") && (pNode.Op = "=") {
+				/// RHS is a string, update the context
+				Set newContext = $lb(leftScope.LastField _ ":" _ rightScope.LastField)
+			}
+
+			/// If the RHS does have data in it, we assume this BEXP is complete
+			Set pScope.CompletionType = "OPERATOR"
+			Set pScope.CompletionScope = "ALL"
+			Set pScope.PrefixToken = ""
+
+			#; Set leftScope.LastField = rightScope.LastField
+			Set pScope.Context = pScope.Context _ newContext
+
+			Return pScope
+		} ElseIf $LF(fnOps, pNode.Op) {
+			Set fnInScope = leftScope
+
+			/// In the case of Union, we disregard the left scope and use the incoming scope
+			Set:pNode.Op="|" fnInScope = pScope
+
+			Set fnScope = ..InferFunctionScope(pNode.Op, fnInScope)
+
+			Set fnScope.PrefixToken = ""
+
+			Set rightScope = ..InferType(pNode.Right, fnScope)
+
+			Return:rightScope'="UNKNOWN" rightScope
+			Return pScope
+		} Else {
+			#; 109
+			#; 118
+			#; 98
+			#; 85
+			#; 69
+			#; 70
+			#; 71
+
+			/// By default, we pass the LHS scope to the RHS tree of the BEXP
+			Set inScope = leftScope
+
+			/// For boolean operators, we pass the original scope down
+			Set:$LF(boolOps, pNode.Op) inScope = pScope
+
+			Set rightScope = ..InferType(pNode.Right, inScope)
+
+			If (rightScope.DataType = "UNKNOWN") {
+				Set leftScope.CompletionType = "PROPERTY"
+				Set leftScope.CompletionScope = "DIRECT"
+				Set leftScope.PrefixToken = ""
+
+				Return leftScope
+			
+			} ElseIf (rightScope.CompletionType = "NONE") {
+				Set scope = pScope
+				Set scope.CompletionType = "OPERATOR"
+				Set scope.Context = rightScope.Context _ leftScope.Context
+				Set scope.PrefixToken = ""
+			} Else {
+				Set scope = rightScope
+				Set scope.Context = rightScope.Context _ leftScope.Context
+			}
+
+			Return scope
+		}
+	} ElseIf name = "CallExpr" {
+
+		/// TODO: This logic should not be in multiple branches, we should either use a dedicated class
+		/// for handling various functions or use the InferFunctionScope method with a pPartial parameter
+		/// to indicate whether the function is partial or not
+		If pNode.Partial {
+			/// If this is a partial call, the user has not typed the ) yet so
+			/// we traverse down the last argument to get the type of the function call expression
+
+			/// TODO: Resetting the prefix token here is a bit of a hack -- ideally we should set the prefix
+			/// token in the correct places in the InferType method rather than resetting it here
+
+			Set fnScope = ..InferFunctionScope(pNode.Callee.Name, pScope)
+			Set fnScope.PrefixToken = ""
+
+			Set lastArgScope = ..InferType(pNode.Args.GetAt(pNode.Args.Size), fnScope)
+
+			Return:lastArgScope.DataType'="UNKNOWN" lastArgScope
+			Return fnScope
+		} Else {
+			/// If the call is not partial, we can infer the type based on the function definition
+			Set unchangedScopeFns = $lb("skip","tail")
+			If $LF(unchangedScopeFns, pNode.Callee.Name) {
+				/// These functions do not change the scope in any way
+				Set pScope.CompletionType = "NONE"
+				Return pScope
+			} ElseIf (pNode.Callee.Name = "exists") || (pNode.Callee.Name = "not") {
+				Set pScope.DataType = "BOOLEAN"
+				Set pScope.FHIRType = "BOOLEAN"
+				Set pScope.CompletionType = "ANY"
+				Set pScope.Cardinality = 1
+				Return pScope
+			} ElseIf (pNode.Callee.Name = "first") || (pNode.Callee.Name = "last") || (pNode.Callee.Name = "single") {
+				Set pScope.Cardinality = 1
+				Set pScope.CompletionType = "NONE"
+				Return pScope
+			} ElseIf (pNode.Callee.Name = "ofType") {
+				/// Create a new scope to be modified
+				Set freshScope = ##class(FHIR.FHIRPath.Context.Scope).%New()
+				Set scope = ..InferType(pNode.Args.GetAt(1), freshScope)
+
+				Set scope.CompletionType = "ANY"
+				Set scope.CompletionScope = "DIRECT"
+				Return scope
+			} ElseIf (pNode.Callee.Name = "union") {
+				Set freshScope = ##class(FHIR.FHIRPath.Context.Scope).%New()
+				Set scopeOfArg = ..InferType(pNode.Args.GetAt(1), freshScope)
+
+				/// Now merge the scopes
+				Set scope = pScope.MergeScope(scopeOfArg)
+				Return scope
+			} ElseIf (pNode.Callee.Name = "as") {
+				/// Try to cast/infer type
+				Set tScope = ..InferType(pNode.Args.GetAt(1), pScope)
+
+				/// For choice fields, attempt to create a scope
+				Set type = tScope.PrefixToken
+				
+				/// TODO: Odd way of doing this, should perform this at the stage of setting the FHIRType,
+				/// not here
+				If ($LF($LISTFROMSTRING($LISTTOSTRING(tScope.FHIRType)), type)) {
+					/// This is a valid type for this field, cast as this type
+					/// and move the context to a subfield if this was a
+					/// choice field
+					Set tScope.GlobalRef = ..ContextHelper.AscendSubscript(tScope.GlobalRef)
+					Set nScope = ..CreateScope(tScope.LastField _ type, tScope, .success)
+
+					Set:success tScope = nScope
+				}
+
+				/// Consume the token regardless of if this type was valid
+				Set tScope.PrefixToken = ""
+
+				Set tScope.CompletionScope = "DIRECT"
+				Set tScope.CompletionType = "PROPERTY,OPERATOR"
+
+				Return tScope
+
+			} ElseIf (pNode.Callee.Name = "where") {
+
+				/// Create a context for resolving the extension
+				Set nScope = ..InferType(pNode.Args.GetAt(1), pScope)
+
+				Return nScope
+			} Else {
+				/// TODO: This else statement should be removed, only here for development purposes until
+				/// tests pass
+				W !,"[NOT IMPLEMENTED]: Unable to handle function " _ pNode.Callee.Name,!
+				Return pScope
+			}
+		}
+	} ElseIf (name = "IdentExpr") {
+		Set pScope.PrefixToken = pNode.Name
+		Set scope = ..CreateScope(pNode.Name, pScope, .success)
+
+		If (success) {
+			/// If this IdentityExpr successfully advanced the scope, we consume the "PrefixToken" and send back
+			// the updated scope
+			Set scope.PrefixToken = ""
+			Set scope.CompletionType = "ANY"
+			Set scope.DataType = "FHIRTYPE"
+
+			Set scope.LastField = pNode.Name
+			Return scope
+		}
+
+		/// Otherwise update the PrefixToken as this is not a valid token
+		Set scope.PrefixToken = pNode.Name
+		
+		If (pNode.Name = "true") || (pNode.Name = "false") {
+			/// True/false are special identifiers, consume
+			/// the identifier
+			Set scope.DataType = "BOOLEAN"
+			Set scope.CompletionType = "NONE"
+			Set scope.PrefixToken = ""
+		}
+
+		Return scope
+	} ElseIf name = "PartialExpr" {
+		Set scope = ##class(FHIR.FHIRPath.Context.Scope).%New()
+		Set scope.DataType = "UNKNOWN"
+		Return scope
+	} ElseIf name = "IndexExpr" {
+		Set scope = ..InferType(pNode.Field, pScope)
+		Set scope.Cardinality = 1
+		Return scope
+		#; Do ..InorderTraversal(pExpr.Field, .pCtx, .finalTokenPrefix, .suggestValues, .refWithinFunctionCall, withinFunctionCall)
+	}ElseIf (name = "NumberExpr") || (name = "DecimalExpr") || (name = "QuantityExpr") {
+		Set pScope.CompletionType = "NONE"
+	}ElseIf (name = "StringExpr") {
+		/// This type is a literal
+		Set scope = pScope.Duplicate()
+
+		/// Consume the prefixToken
+		/// TODO#3ERL: We need a uniform way of describing the data encapsulated in the scope,
+		/// the below should be modified to have DataType = "FHIRTYPE" and FHIRType = $lb("string"),
+		/// see linked TODO code
+		Set scope.PrefixToken = ""
+		Set scope.DataType = "STRING"
+		Set scope.FHIRType = ""
+		Set scope.CompletionType = "OPERATOR"
+		Set scope.CompletionScope = "DIRECT"
+		Set scope.LastField = pNode.Value
+
+		Return scope
+	}ElseIf name = "UnaryExpr" { 
+		#; Do ..InorderTraversal(pExpr.Expr, .pCtx, .finalTokenPrefix, .suggestValues, .refWithinFunctionCall, withinFunctionCall)
+	}Else {
+		Throw ##class(%Exception.General).%New("Unable to handle class " _cls, "-33114")
+	}
+
+	Return pScope
+}
+
+/// Returns a list of resources to search or "" (empty string) if pSearch is a valid resource
+Method SearchResources(pSearch As %String) As %ListOfDataTypes [ Private ]
+{
+	Set output = ##class(%ListOfDataTypes).%New()
+	Set tRS = ##class(%SQL.Statement).%ExecDirect(,"SELECT DISTINCT(type) FROM HS_FHIRMeta_Storage.Rsrc WHERE (packageId %INLIST ?) AND kind='resource' AND %UPPER(type) LIKE ?", ..Loader.packageIdList, $ZCVT(pSearch, "U") _ "%")
+	While tRS.%Next() '= 0 {
+		Set type = tRS.%Get("type")
+		If ($ZCVT(type, "U") = $ZCVT(pSearch, "U")) {
+			Return ""
+		}
+		Do output.Insert(tRS.%Get("type") _ ".")
+	}
+
+	Return output
+}
+
+Method Suggest(pExpression As %String, scope As %RegisteredObject = "") As %ListOfDataTypes
 {
 	Set outputList = ##class(%ListOfDataTypes).%New()
 
-	Set suggestedResources = ##class(%ListOfDataTypes).%New()
+	Set searchString = pExpression
+	Set resourceFilter = ..ResourceFilter
 
-	Set searchString = ""
-	/// First, locate the resource type.
-	If ..ResourceFilter '= "" {
-		/// Specific resource filter
-		Set ..Resource = ..ResourceFilter
-		Set tRS = ##class(%SQL.Statement).%ExecDirect(,"SELECT * FROM HS_FHIRMeta_Storage.Rsrc WHERE coreVersion=? AND id=type AND kind='resource' AND %UPPER(id) = ?", "4.0.1", $ZCVT(..ResourceFilter, "U"))
-		Throw:tRS.%Next()=0 ##class(%Exception.General).%New("Resource not found","-30211",,"The resource '" _ ..ResourceFilter _ "' could not be found")
-		Set searchString = pExpression
-	} Else {
-		Set ..Resource = $PIECE(pExpression, ".")
-		/// Check if this resource is valid
-		Set tRS = ##class(%SQL.Statement).%ExecDirect(,"SELECT * FROM HS_FHIRMeta_Storage.Rsrc WHERE coreVersion=? AND id=type AND kind='resource' AND %UPPER(id) LIKE ?", "4.0.1", $ZCVT(..Resource, "U") _ "%")
-
-		While tRS.%Next() '= 0 {
-			If (..Resource = tRS.%Get("id")) {
-				/// Full match found
-				Do suggestedResources.Clear()
-				Quit
-			} Else {
-				Do suggestedResources.Insert(tRS.%Get("id") _ ".")
-			}
-		}
-
-		// Remove the resource from the search string
+	/// If a resource filter isn't set, extract it from the expression
+	/// typically the FHIRPath expression begins with the resource type
+	If (resourceFilter = "") {
+		Set resourceSearch = $PIECE(pExpression, ".")
 		Set searchString = $PIECE(pExpression, ".", 2, *)
+
+		#; Set resourceFilter = resourceSearch
 	}
 
-	Return:suggestedResources.Size>0 suggestedResources
+	Set:resourceFilter'="" searchString = resourceFilter _ "." _ searchString
 
-	/// Check if this resource exists
-	Set pathList = ##class(%ListOfDataTypes).%New()
+	If (..ResourceFilter '= "") {
+		Set ctx = ##class(FHIR.FHIRPath.FHIRContextHelper).BuildResourceContext(..Loader, resourceFilter)
+		Set ..ContextHelper = ctx
+		Set scope = ##class(FHIR.FHIRPath.Context.Scope).%New()
+		Set scope.Cardinality = 1
+		Set scope.DataType = "RESOURCE"
+		Set scope.CompletionType = "ANY"
+		Set scope.FHIRType = resourceFilter
+		Set scope.RootRef = ctx.GlobalRef
+	} Else {
+		Set scope = ##class(FHIR.FHIRPath.Context.Scope).%New()
+	}
+	
+	Set parser = ##class(FHIR.FHIRPath.Parser).ParseString(pExpression)
+	Set ast = parser.Root
 
-	Set ctx = ##class(FHIR.FHIRPath.FHIRContextHelper).BuildResourceContext(..Resource)
+	/// We want to start by advancing into the resource itself
+	#; Do ctx.AdvanceContext(..Resource)
+	Set suggestValues = 0
+	#; Do ..InorderTraversal(ast, .ctx, .lastTokenFilter, .suggestValues, .withinFnCall)
+
+	/// Try to infer the type of the current expression to provide better suggestions
+	#; Set scope = ..CreateScope()
+	#; Set scope = ##class(FHIR.FHIRPath.Context.Scope).%New()
+	#; Set scope.Cardinality = 1
+	#; Set scope.DataType = "RESOURCE"
+	#; Set scope.CompletionType = "ANY"
+	#; Set scope.FHIRType = resourceFilter
+	#; Set scope.RootRef = ctx.GlobalRef
+
+	Do ..MarkCursor(ast)
+	Set endScope = ..InferType(ast, scope)
+
+	#; w !,!,!,"Final scope:",!
+	/// TODO: Remove this line..
+	zw:^AFPDEBUG endScope
+	#; Set scope = endScope
+
+	Set assist = ##class(FHIR.TypeAssist.Engine).%New(..Loader)
+	Set suggestions = assist.Suggest(endScope)
+	Set prefix = endScope.PrefixToken
+	Set endToken = parser.Peek()
+
+	If (endToken.Type '= "EOF") {
+		Set prefix = endToken.Lexeme
+	}
+
+	For i=1:1:suggestions.Size {
+		Set suggestion = suggestions.GetAt(i)
+
+		If ($EXTRACT(suggestion, 1, $L(prefix)) = prefix) || (prefix = "") {
+			Do outputList.Insert(suggestion)
+		}
+	}
+	Return outputList
+
+	/// Create a context helper
+	Set ctx = ##class(FHIR.FHIRPath.FHIRContextHelper).BuildResourceContext(..Loader, resourceFilter)
+	Set ..ContextHelper = ctx
 	
 	Set ast = ##class(FHIR.FHIRPath.Parser).ParseString(searchString)
 
 	/// We want to start by advancing into the resource itself
-	Do ctx.AdvanceContext(..Resource)
-	Do ..InorderTraversal(ast, ctx, .lastTokenFilter, .withinFnCall)
+	#; Do ctx.AdvanceContext(..Resource)
+	Set suggestValues = 0
+	Do ..InorderTraversal(ast, .ctx, .lastTokenFilter, .suggestValues, .withinFnCall)
+
+	/// Try to infer the type of the current expression to provide better suggestions
+	Set scope = ##class(FHIR.FHIRPath.Context.Scope).%New()
+	Set scope.Cardinality = 1
+	Set scope.DataType = "RESOURCE"
+	Set scope.CompletionType = "ANY"
+	Set scope.FHIRType = resourceFilter
+
+	Do ..MarkCursor(ast)
+	Set endScope = ..InferType(ast, scope)
+	#; w !,!,!,"Final scope:",!
+	#; zw endScope
+	#; Set scope = endScope
+
+	Set assist = ##class(FHIR.TypeAssist.Engine).%New(..Loader)
+	Set suggestions = assist.Suggest(endScope)
+	Return suggestions
 	
 	#; Write "LastTokenFilter="_lastTokenFilter,!
 
 	Set propertyList = ctx.GetPropertyList()
 	Set fnList = ctx.GetFunctionsList()
+	Set suggestionList = ""
+	Set:suggestValues suggestionList = ctx.GetSuggestionsList()
 
 	#; Write "lasttoken=" _ lastTokenFilter,!,!
 	
@@ -130,10 +633,11 @@ Method Suggest(pExpression As %String) As %ListOfDataTypes
 
 	/// Filter 
 	For i=1:1:propertyList.Size {
-		If ($EXTRACT(propertyList.GetAt(i), 1, $L(lastTokenFilter)) = lastTokenFilter) {
-			Do outputList.Insert(propertyList.GetAt(i) _ suffix)
-			Do:ctx.CollectionFields.Find(propertyList.GetAt(i))'="" outputList.Insert(propertyList.GetAt(i) _ "[")
-			Do:propertyList.GetAt(i)="extension" outputList.Insert("extension(")
+		Set propName = ctx.GetFieldDisplayName(propertyList.GetAt(i))
+		If ($EXTRACT(propName, 1, $L(lastTokenFilter)) = lastTokenFilter) {
+			Do outputList.Insert(propName _ suffix)
+			Do:ctx.IsCollectionField(propertyList.GetAt(i)) outputList.Insert(propName _ "[")
+			Do:propName="extension" outputList.Insert("extension(")
 		}
 	}
 
@@ -144,6 +648,14 @@ Method Suggest(pExpression As %String) As %ListOfDataTypes
 			Do outputList.Insert(fnList.GetAt(i))
 		}
 	}
+
+	If suggestionList'="" {
+		For i=1:1:suggestionList.Size {
+			If ($EXTRACT(suggestionList.GetAt(i), 1, $L(lastTokenFilter)) = lastTokenFilter) {
+				Do outputList.Insert("'" _ suggestionList.GetAt(i) _ "'")
+			}
+		}
+	}
 	
 	Return outputList
 }
@@ -151,10 +663,15 @@ Method Suggest(pExpression As %String) As %ListOfDataTypes
 ClassMethod Test(pExpr)
 {
 	Set a = ##class(FHIR.FHIRPath.Autocomplete).%New()
-	Set l = a.Suggest(pExpr)
+	Set l = a.Suggest(pExpr, .scope)
 	For i=1:1:l.Size {
 		Write l.GetAt(i),!
 	}
+
+	Set engine = ##class(FHIR.TypeAssist.Engine).%New(a.Loader)
+	#; zw engine.Suggest(scope)
+
+	Return scope
 }
 
 }

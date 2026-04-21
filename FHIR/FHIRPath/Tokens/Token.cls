@@ -9,7 +9,7 @@ Property Type As %String(VALUELIST = ",STRING,NUMBER,IDENT,PLUS,MINUS,AS,IS,MULT
 
 Property Lexeme As %String;
 
-Property Literal As %String;
+Property Literal As %String(MAXLEN = "");
 
 Property Pos As %Integer;
 

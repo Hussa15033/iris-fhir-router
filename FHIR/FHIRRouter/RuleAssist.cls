@@ -59,7 +59,7 @@ ClassMethod GetQueryData(ByRef pArray, pParam) As %String
 ClassMethod GetPropertyList(ByRef pArray, pText) As %String
 {
 	#; Return "," _ pArray("segName") _ ",test"
-	Set autocomplete = ##class(FHIR.FHIRPath.Autocomplete).%New($G(pArray("resourceFilter")))
+	Set autocomplete = ##class(FHIR.FHIRPath.Autocomplete).%New($G(pArray("FHIRPackage")), $G(pArray("resourceFilter")))
 	Set pSearch = pText
 	Set:pSearch="" pSearch = pArray("segName")
 	Set pathList = autocomplete.Suggest(pSearch)

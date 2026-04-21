@@ -11,9 +11,13 @@
 Class FHIR.FHIRPath.Parser Extends %RegisteredObject
 {
 
-Property Prefix As %ArrayOfObjects;
+Property Prefix As %ArrayOfObjects [Private];
 
-Property Infix As %ArrayOfObjects;
+Property Infix As %ArrayOfObjects [Private];
+
+Property Root As FHIR.FHIRPath.Expr.Expression;
+
+Property PrefixString As %String;
 
 Property TokenStream As FHIR.FHIRPath.TokenStream;
 
@@ -65,7 +69,7 @@ ClassMethod ParseString(pInput As %String) As FHIR.FHIRPath.Parser
 {
 	Set tokenStream = ##class(FHIR.FHIRPath.TokenStream).%New(pInput)
 
-	Set parser = ##class(FHIR.FHIRPath.Parser).%New(tokenStream)
+	Set parser = ..%New(tokenStream)
 
 	/// TODO: Add operator precedence according to the FHIRPath docs
 	/// https://hl7.org/fhirpath/#operator-precedence
@@ -145,7 +149,8 @@ ClassMethod ParseString(pInput As %String) As FHIR.FHIRPath.Parser
 	Do parser.RegisterPrefix("IS", ##class(FHIR.FHIRPath.Parselet.IdentParselet).%New())
 	
 
-	Return parser.ParseExpression(0)
+	Set parser.Root = parser.ParseExpression(0)
+	Return parser
 }
 
 ClassMethod Test()
