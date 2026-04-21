@@ -238,13 +238,18 @@ Method InferType(pNode As FHIR.FHIRPath.Expr.Expression, pScope As FHIR.FHIRPath
 		Throw ##class(%Exception.General).%New("Unable to handle package " _ package)
 	}
 
+	Set pScope = pScope.Duplicate()
+
 	If name = "BinaryExpr" {
 		/// We traverse down the left to get the type of the left side
 		/// We pass the scope down to the left side, which will update the scope based on the type of the left side expression
+		/// TODO: pScope becomes mutated ... should NEVER be the case...
 		Set leftScope = ..InferType(pNode.Left, pScope)
 
 		/// Operators that double as functions
 		Set fnOps = $lb("is", "as", "|")
+		Set compOps = $lb(">",">=","<","<=","=","!=")
+		Set boolOps = $lb("and", "or", "implies", "xor")
 
 		If pNode.Op = "." {
 			Set leftScope.CompletionType = "PROPERTY,FUNCTION"
@@ -282,7 +287,7 @@ Method InferType(pNode As FHIR.FHIRPath.Expr.Expression, pScope As FHIR.FHIRPath
 			}
 
 			/// If the RHS does have data in it, we assume this BEXP is complete
-			Set pScope.CompletionType = "BOOLEAN"
+			Set pScope.CompletionType = "OPERATOR"
 			Set pScope.CompletionScope = "ALL"
 			Set pScope.PrefixToken = ""
 
@@ -291,7 +296,13 @@ Method InferType(pNode As FHIR.FHIRPath.Expr.Expression, pScope As FHIR.FHIRPath
 
 			Return pScope
 		} ElseIf $LF(fnOps, pNode.Op) {
-			Set fnScope = ..InferFunctionScope(pNode.Op, leftScope)
+			Set fnInScope = leftScope
+
+			/// In the case of Union, we disregard the left scope and use the incoming scope
+			Set:pNode.Op="|" fnInScope = pScope
+
+			Set fnScope = ..InferFunctionScope(pNode.Op, fnInScope)
+
 			Set fnScope.PrefixToken = ""
 
 			Set rightScope = ..InferType(pNode.Right, fnScope)
@@ -306,20 +317,33 @@ Method InferType(pNode As FHIR.FHIRPath.Expr.Expression, pScope As FHIR.FHIRPath
 			#; 69
 			#; 70
 			#; 71
-			/// By default, we pass the LHS scope to the RHS tree of the BEXP
-			Set rightScope = ..InferType(pNode.Right, leftScope)
 
-			If rightScope.DataType '= "UNKNOWN" {
-				Set scope = ##class(FHIR.FHIRPath.Context.Scope).%New()
-				Set scope.CompletionType = "BOOLEAN"
-				Set scope.CompletionScope = "ALL"
+			/// By default, we pass the LHS scope to the RHS tree of the BEXP
+			Set inScope = leftScope
+
+			/// For boolean operators, we pass the original scope down
+			Set:$LF(boolOps, pNode.Op) inScope = pScope
+
+			Set rightScope = ..InferType(pNode.Right, inScope)
+
+			If (rightScope.DataType = "UNKNOWN") {
+				Set leftScope.CompletionType = "PROPERTY"
+				Set leftScope.CompletionScope = "DIRECT"
+				Set leftScope.PrefixToken = ""
+
+				Return leftScope
+			
+			} ElseIf (rightScope.CompletionType = "NONE") {
+				Set scope = pScope
+				Set scope.CompletionType = "OPERATOR"
+				Set scope.Context = rightScope.Context _ leftScope.Context
+				Set scope.PrefixToken = ""
 			} Else {
 				Set scope = rightScope
+				Set scope.Context = rightScope.Context _ leftScope.Context
 			}
 
-			Set rightScope.Context = rightScope.Context _ leftScope.Context
-
-			Return rightScope
+			Return scope
 		}
 	} ElseIf name = "CallExpr" {
 
@@ -413,7 +437,6 @@ Method InferType(pNode As FHIR.FHIRPath.Expr.Expression, pScope As FHIR.FHIRPath
 			}
 		}
 	} ElseIf (name = "IdentExpr") {
-		/// This may change the scope...
 		Set pScope.PrefixToken = pNode.Name
 		Set scope = ..CreateScope(pNode.Name, pScope, .success)
 
@@ -430,6 +453,15 @@ Method InferType(pNode As FHIR.FHIRPath.Expr.Expression, pScope As FHIR.FHIRPath
 
 		/// Otherwise update the PrefixToken as this is not a valid token
 		Set scope.PrefixToken = pNode.Name
+		
+		If (pNode.Name = "true") || (pNode.Name = "false") {
+			/// True/false are special identifiers, consume
+			/// the identifier
+			Set scope.DataType = "BOOLEAN"
+			Set scope.CompletionType = "NONE"
+			Set scope.PrefixToken = ""
+		}
+
 		Return scope
 	} ElseIf name = "PartialExpr" {
 		Set scope = ##class(FHIR.FHIRPath.Context.Scope).%New()
@@ -447,6 +479,9 @@ Method InferType(pNode As FHIR.FHIRPath.Expr.Expression, pScope As FHIR.FHIRPath
 		Set scope = pScope.Duplicate()
 
 		/// Consume the prefixToken
+		/// TODO#3ERL: We need a uniform way of describing the data encapsulated in the scope,
+		/// the below should be modified to have DataType = "FHIRTYPE" and FHIRType = $lb("string"),
+		/// see linked TODO code
 		Set scope.PrefixToken = ""
 		Set scope.DataType = "STRING"
 		Set scope.FHIRType = ""
@@ -511,7 +546,8 @@ Method Suggest(pExpression As %String, scope As %RegisteredObject = "") As %List
 		Set scope = ##class(FHIR.FHIRPath.Context.Scope).%New()
 	}
 	
-	Set ast = ##class(FHIR.FHIRPath.Parser).ParseString(pExpression)
+	Set parser = ##class(FHIR.FHIRPath.Parser).ParseString(pExpression)
+	Set ast = parser.Root
 
 	/// We want to start by advancing into the resource itself
 	#; Do ctx.AdvanceContext(..Resource)
@@ -538,6 +574,11 @@ Method Suggest(pExpression As %String, scope As %RegisteredObject = "") As %List
 	Set assist = ##class(FHIR.TypeAssist.Engine).%New(..Loader)
 	Set suggestions = assist.Suggest(endScope)
 	Set prefix = endScope.PrefixToken
+	Set endToken = parser.Peek()
+
+	If (endToken.Type '= "EOF") {
+		Set prefix = endToken.Lexeme
+	}
 
 	For i=1:1:suggestions.Size {
 		Set suggestion = suggestions.GetAt(i)

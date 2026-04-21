@@ -68,6 +68,23 @@ Method AddStringOperators(pSuggestions As %ListOfDataTypes) [Private] {
 	Do pSuggestions.Insert("&")
 }
 
+Method AddBooleanIdentifiers(pSuggestions As %ListOfDataTypes) [Private] {
+	Do pSuggestions.Insert("true")
+	Do pSuggestions.Insert("false")
+}
+
+Method HasComparisonType(pTypes As %String) As %Boolean {
+	Set comparisonTypes = $lb("integer","decimal","Quantity","date","dateTime","time","string")
+	For i=1:1:$LL(comparisonTypes) {
+		If $LF(pTypes, $LG(comparisonTypes, i)) {
+			/// If the type is a valid ordering type
+			Return 1
+		}
+	}
+
+	Return 0
+}
+
 /// TODO: The prefix should be used to filter suggestions before returning them,
 /// rather than returning all suggestions and filtering in the caller
 Method Suggest(pScope As FHIR.FHIRPath.Context.Scope) As %ListOfDataTypes
@@ -76,6 +93,8 @@ Method Suggest(pScope As FHIR.FHIRPath.Context.Scope) As %ListOfDataTypes
 	#define HasCT(%a)				$LF(completionTypes, %a)
 	#define COP						$$$HasCT("OPERATOR")
 	#define CANY					$$$HasCT("ANY")
+
+	/// Note: $$$CIDENT is deprecated in favour of $$$CPROP
 	#define CIDENT					$$$HasCT("IDENTIFIER")
 	#define CPROP					$$$HasCT("PROPERTY")
 	#define CFN						$$$HasCT("FUNCTION")
@@ -91,26 +110,32 @@ Method Suggest(pScope As FHIR.FHIRPath.Context.Scope) As %ListOfDataTypes
 
 	Return:$$$CNONE suggestions
 
-	If $$$CBOOL {
-		/// If the data type is boolean and we're looking for operators
-		Do ..AddBooleanOperators(suggestions)
-		Return suggestions
-	}
 
 	If ($$$COP) {
 		Do ..AddEqualityOperators(suggestions)
 
-		Set comparisonTypes = $lb("integer","decimal","Quantity","date","dateTime","time","string")
-		For i=1:1:$LL(comparisonTypes) {
-			Set quit = 0
-			If $LF(pScope.FHIRType, $LG(comparisonTypes, i)) {
-				/// If the type is a valid ordering type
-				Do ..AddComparisonOperators(suggestions)
-				Set quit = 1
-			}
+	
+		Set hasComparisonTypes = ..HasComparisonType($LISTFROMSTRING(pScope.FHIRType))
 
-			Quit:quit
+		If (hasComparisonTypes) {
+			Do ..AddComparisonOperators(suggestions)
+		} Else {
+			Do ..AddBooleanOperators(suggestions)
 		}
+
+		If ($LF(pScope.FHIRType, "string") || $LF(pScope.FHIRType, "code") || (pScope.DataType = "STRING")) {
+			Do ..AddStringOperators(suggestions)
+		}
+
+		Return suggestions
+	}
+
+	/// TODO#3ERL: We need a consistent way of representing data stored in the scope. Use DataType="FHIRType" and
+	/// FHIRType = "boolean" | "string" | ...
+	If (pScope.DataType = "BOOLEAN") && ($$$CANY || $$$COP) {
+		Do ..AddBooleanOperators(suggestions)
+
+		Return suggestions
 	}
 
 	If $$$CFN || $$$CANY {
@@ -120,6 +145,8 @@ Method Suggest(pScope As FHIR.FHIRPath.Context.Scope) As %ListOfDataTypes
 		If (pScope.Cardinality = 1) {
 			Do ..AddBooleanFunctions(suggestions)
 		}
+
+		Do ..AddBooleanIdentifiers(suggestions)
 	}
 
 	If (pScope.DataType = "RESOURCE") && (pScope.FHIRType'="") && ($LL(pScope.FHIRType) = 1) {
@@ -151,7 +178,7 @@ Method Suggest(pScope As FHIR.FHIRPath.Context.Scope) As %ListOfDataTypes
 		Set suggestions2 = suggestions2 _ ctxHelper.FindImmediateDescendants(ctxHelper.GetTypeRef(ref))
 		Set suffix = ""
 
-		If pScope.Function = "" {
+		If (pScope.Function = "") || (pScope.Function = "|") {
 			Set suffix = "."
 		}
 		For i=1:1:$LL(suggestions2) {
@@ -170,10 +197,6 @@ Method Suggest(pScope As FHIR.FHIRPath.Context.Scope) As %ListOfDataTypes
 	If ($LF(pScope.FHIRType, "string") || $LF(pScope.FHIRType, "code") || (pScope.DataType = "STRING")) {
 		If (($$$CIDENT || $$$CANY || $$$CFN)) {
 			Do ..AddStringFunctions(suggestions)
-		}
-
-		If ($$$CANY || $$$COP) {
-			Do ..AddStringOperators(suggestions)
 		}
 	}
 
@@ -256,7 +279,7 @@ Method Suggest(pScope As FHIR.FHIRPath.Context.Scope) As %ListOfDataTypes
 	If ($$$CRESOURCE) {
 		Set tRS = ##class(%SQL.Statement).%ExecDirectNoPrivNoAudit(,"SELECT DISTINCT(type) FROM HS_FHIRMeta_Storage.Rsrc WHERE coreVersion=? AND (kind='resource') AND id=type", ..Loader.coreVersion)
 		Set suffix = ""
-		Set:pScope.Function="" suffix = "."
+		Set:(pScope.Function="")||(pScope.Function="|") suffix = "."
 		While tRS.%Next() {
 
 			Do suggestions.Insert(tRS.%Get("type") _ suffix)
