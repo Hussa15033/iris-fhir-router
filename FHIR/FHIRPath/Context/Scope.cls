@@ -12,7 +12,7 @@ Class FHIR.FHIRPath.Context.Scope Extends %RegisteredObject
 /// 
 /// 
 /// TODO: DataType should be a list not a string.
-Property DataType As %String(VALUELIST = "NONE,RESOURCE,FHIRTYPE,BOOLEAN,STRING,INTEGER,LITERAL,UNKNOWN");
+Property DataType As %String(VALUELIST = "NONE,RESOURCE,FHIRTYPE,BOOLEAN,STRING,INTEGER,LITERAL,UNKNOWN,EMPTY");
 
 Property CompletionType As %String(VALUELIST = "ANY,VALUE,TYPE,FUNCTION,PROPERTY,RESOURCE,OPERATOR,NONE") [ InitialExpression = "RESOURCE" ];
 
@@ -39,18 +39,19 @@ Property LastField As %String;
 Property Context As %List;
 
 /// Reference to the resource global
-Property RootRef As %String;
+Property RootScope As Scope;
 
 Method MergeScope(pScope As FHIR.FHIRPath.Context.Scope)
 {
 	/// TODO: This merge function needs to be fixed to properly merge scopes
 	/// it currently performs an extremely basic merge (that is technically incorrect)
 	/// Merge another scope into this
-	Set pScope.DataType = "FHIRTYPE"
-	Set pScope.FHIRType = pScope.FHIRType _ ..FHIRType
-	Set pScope.Cardinality = ..Cardinality
-
-	Return pScope
+	Set ..DataType = "FHIRTYPE"
+	Set ..FHIRType = pScope.FHIRType _ ..FHIRType
+	Set ..Cardinality = "*"
+	Set ..GlobalRefs = pScope.GlobalRefs _ ..GlobalRefs
+	Set ..Context = pScope.Context _ ..Context
+	Set ..LastField = ""
 }
 
 Method Duplicate()
@@ -64,7 +65,25 @@ Method Duplicate()
 	Set dupe.GlobalRefs = ..GlobalRefs
 	Set dupe.Function = ..Function
 	Set dupe.CompletionScope = ..CompletionScope
-	Set dupe.RootRef = ..RootRef
+	Set dupe.RootScope = ..RootScope
+	Set dupe.LastField = ..LastField
+	Set dupe.Context = ..Context
+	Return dupe
+}
+
+/// Create a child scope from this
+Method Child()
+{
+	Set dupe = ..%New()
+	Set dupe.DataType = ..DataType
+	Set dupe.FHIRType = ..FHIRType
+	Set dupe.Cardinality = ..Cardinality
+	Set dupe.ScopedVariables = ..ScopedVariables
+	Set dupe.CompletionType = ..CompletionType
+	Set dupe.GlobalRefs = ..GlobalRefs
+	Set dupe.Function = ..Function
+	Set dupe.CompletionScope = ..CompletionScope
+	Set dupe.RootScope = ..RootScope
 	Set dupe.LastField = ..LastField
 	Set dupe.Context = ..Context
 	Return dupe

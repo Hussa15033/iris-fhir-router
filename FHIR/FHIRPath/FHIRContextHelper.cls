@@ -28,9 +28,12 @@ Property Loader As HS.FHIRMeta.Load.NpmLoader;
 
 Property Scope As FHIR.FHIRPath.Context.Scope;
 
+Property CorePkg As %String;
+
 Method %OnNew(pLoader As HS.FHIRMeta.Load.NpmLoader) As %Status
 {
 	Set ..Loader = pLoader
+	Set ..CorePkg = $LG(..Loader.packageIdList)
 	Quit $$$OK
 }
 
@@ -42,9 +45,40 @@ Method CreateScope(pIdent As %String, pInScope As FHIR.FHIRPath.Context.Scope, B
 	/// recreating the context helper every time
 	Set scope = ##class(FHIR.FHIRPath.Context.Scope).%New()
 	Set scope.Function = pInScope.Function
+	Set scope.RootScope = pInScope.RootScope
 	Set success = 0
 
-	If (pInScope.DataType = "RESOURCE") && ($LL(pInScope.FHIRType) = 1) {
+	If (pIdent = "Quantity") {
+		zw pInScope
+		w "test.."
+		#; hang 10
+	}
+	If ($LF($LISTFROMSTRING(pInScope.CompletionType), "TYPE"))&&((pInScope.Function = "as") || (pInScope.Function = "ofType")) {
+		w "here..."
+		#; hang 5
+		/// This is a type of this property and we are casting it
+		Set types = ##class(Utils).GetDirectTypesFromRefs(pInScope.GlobalRefs)
+		If ($LF(types, pIdent)) {
+			/// This type is a valid type, move the ref to the type ref
+			Set typeRef = ##class(FHIR.TypeAssist.Utils).GetTypeRefFromTypeName(..CorePkg, pIdent)
+
+			Return:typeRef="" pInScope
+			
+			Set success = 1
+			Set pInScope.DataType = "FHIRTYPE"
+			Set pInScope.FHIRType = $lb(pIdent)
+			Set pInScope.GlobalRefs = typeRef
+		}
+
+		#; For i=1:1:$LL(tScope.GlobalRefs) {
+		#; 	Set tempRefs = tempRefs _ $lb(##class(FHIR.TypeAssist.Utils).AscendSubscript($LG(tScope.GlobalRefs, i)))
+		#; }
+		#; 		Set tScope.GlobalRefs = tempRefs
+		#; 		Set nScope = ..CreateScope(tScope.LastField _ type, tScope, .success)
+		w "here...",!
+		#; hang 10
+		Return pInScope
+	} ElseIf (pInScope.DataType = "RESOURCE") && ($LL(pInScope.FHIRType) = 1) {
 		/// The scope is a valid resource
 		Set type = $LG(pInScope.FHIRType, 1)
 
@@ -64,11 +98,31 @@ Method CreateScope(pIdent As %String, pInScope As FHIR.FHIRPath.Context.Scope, B
 		/// If successful
 		Set scope.DataType = "FHIRTYPE"
 		Set scope.Cardinality = ##class(Utils).FindMaxCardinality(gRef)
-		Set scope.FHIRType = ##class(Utils).GetTypesFromRef(gRef)
+		Set scope.FHIRType = ##class(Utils).GetDirectTypesFromRefs(gRef)
 		Set scope.GlobalRefs = gRef
 
 		Return scope
 	} ElseIf (pInScope.DataType = "FHIRTYPE") {
+		If ($LF($LISTFROMSTRING(pInScope.CompletionType), "RESOURCE")) {
+			/// Completion type includes Resource
+			Set base = ##class(Utils).AppendSubscript("^FHIR.TypeAssist", $lb(..CorePkg, "Resource", pIdent))
+			If ($DATA(@base) = 10) {
+				Set scope.Cardinality = 1
+				Set scope.GlobalRefs = ##class(Utils).DescendSubscript(base)
+				Set scope.DataType = "RESOURCE"
+				Set scope.FHIRType = pIdent
+				#; Set scope.Cardinality = 1
+				#; Set scope.DataType = "RESOURCE"
+				#; Set scope.FHIRType = pIdent
+				#; Set scope.GlobalRefs = baseResourceGlobalRefs
+				Set scope.RootScope = pInScope.RootScope
+
+				#; zw scope
+				#; hang 5
+				Set success = 1
+				Return scope
+			}
+		}
 		Set validRefs = ""
 
 		For i=1:1:$LL(pInScope.GlobalRefs) {
@@ -99,11 +153,6 @@ Method CreateScope(pIdent As %String, pInScope As FHIR.FHIRPath.Context.Scope, B
 			Set typeRefs = typeRefs _ ##class(Utils).GetTypeRefs($LG(pInScope.GlobalRefs, i))
 		}
 
-		w "Checking type descs...",!,!,!
-
-		Return:typeRefs="" pInScope
-
-		zw typeRefs
 		Set validTypeRefs = ""
 		For i=1:1:$LL(typeRefs) {
 			Set typeRef = ##class(Utils).AppendSubscript($LG(typeRefs, i), pIdent)
@@ -122,6 +171,9 @@ Method CreateScope(pIdent As %String, pInScope As FHIR.FHIRPath.Context.Scope, B
 			Set success = 1
 			Return scope
 		}
+
+		/// If we got to this point, this field is not a valid property nor is it a valid descendant of a type
+		Return pInScope
 	} ElseIf (pInScope.DataType = "") {
 		Quit:pIdent=""
 
@@ -154,7 +206,7 @@ Method CreateScope(pIdent As %String, pInScope As FHIR.FHIRPath.Context.Scope, B
 			Set scope.DataType = "RESOURCE"
 			Set scope.FHIRType = pIdent
 			Set scope.GlobalRefs = baseResourceGlobalRefs
-			Set scope.RootRef = scope.GlobalRefs
+			Set scope.RootScope = scope
 
 			Set success = 1
 			Return scope

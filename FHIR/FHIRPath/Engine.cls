@@ -130,14 +130,8 @@ Method Suggest(pScope As FHIR.FHIRPath.Context.Scope) As %ListOfDataTypes
 
 	/// TODO#3ERL: We need a consistent way of representing data stored in the scope. Use DataType="FHIRType" and
 	/// FHIRType = "boolean" | "string" | ...
-	If ($LF(pScope.FHIRType, "boolean")) {
-		If (($$$CANY || $$$COP)) {
-			Do ..AddBooleanOperators(suggestions)
-		}
-
-		If (($$$CANY || $$$CFN)) {
-			Do ..AddBooleanSingletonFunctions(suggestions)
-		}
+	If ($LF(pScope.FHIRType, "boolean") && ($$$CANY || $$$COP)) {
+		Do ..AddBooleanOperators(suggestions)
 
 		Return suggestions
 	}
@@ -147,7 +141,7 @@ Method Suggest(pScope As FHIR.FHIRPath.Context.Scope) As %ListOfDataTypes
 		Do ..AddFunctions(suggestions)
 	}
 
-	If ($$$CANY) || (pScope.DataType = "") {
+	If ($$$CANY || $$$CRESOURCE) || (pScope.DataType = "") {
 		Do ..AddBooleanIdentifiers(suggestions)
 	}
 
@@ -198,6 +192,10 @@ Method Suggest(pScope As FHIR.FHIRPath.Context.Scope) As %ListOfDataTypes
 		If (($$$CPROP || $$$CANY || $$$CFN)) {
 			Do ..AddStringFunctions(suggestions)
 		}
+	}
+
+	If ($LF(pScope.FHIRType, "boolean") && ($$$CANY || $$$CFN)) {
+		Do ..AddBooleanSingletonFunctions(suggestions)
 	}
 
 	If ($$$CVAL) {

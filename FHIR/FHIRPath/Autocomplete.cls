@@ -89,7 +89,6 @@ ClassMethod MarkCursor(pNode As FHIR.FHIRPath.Expr.Expression) As %Boolean
 /// yet complete
 Method InferFunctionScope(pFnName As %String, pScope As FHIR.FHIRPath.Context.Scope) As FHIR.FHIRPath.Context.Scope
 {
-	Set pScope.Function = pFnName
 	Set pScopedFunctions = $LISTFROMSTRING("exists,all,where,select,iif,aggregate")
 	If $LF(pScopedFunctions, pFnName) {
 		Set pScope.CompletionType = "PROPERTY"
@@ -107,11 +106,9 @@ Method InferFunctionScope(pFnName As %String, pScope As FHIR.FHIRPath.Context.Sc
 		Set pScope.CompletionType = "TYPE"
 		Set pScope.CompletionScope = "ALL"
 	} ElseIf (pFnName = "union") || (pFnName = "|") {
-		w "Within union...",!,!,!,!,!,!
-		Set newScope = ##class(FHIR.FHIRPath.Context.Scope).%New()
+		Set newScope = pScope.RootScope.Duplicate()
 		Set newScope.CompletionType = "RESOURCE,PROPERTY"
-		Set newScope.CompletionScope = "DIRECT"
-		Set newScope.GlobalRefs = pScope.RootRef
+		Set newScope.CompletionScope = "ALL"
 		Set newScope.Function = pFnName
 
 		Set pScope = newScope
@@ -125,8 +122,14 @@ Method InferFunctionScope(pFnName As %String, pScope As FHIR.FHIRPath.Context.Sc
 
 		Set nextScope.CompletionType = "VALUE"
 		Set nextScope.CompletionScope = "DIRECT"
-
 		Set pScope = nextScope
+	}
+
+	Set pScope.Function = pFnName
+
+
+	If (pFnName = "iif") {
+		#; hang 10
 	}
 	Return pScope
 }
@@ -189,21 +192,59 @@ Method InferType(pNode As FHIR.FHIRPath.Expr.Expression, pScope As FHIR.FHIRPath
 		Set boolOps = $lb("and", "or", "implies", "xor")
 
 		If pNode.Op = "." {
+			If (leftScope.DataType = "UNKNOWN") {
+				/// We do not know what the data type of the left side is, so cannot finish
+				/// any completions
+				zw pNode.Left
+				zw leftScope
+				zw pScope
+				w "LEFT SIDE UNKNOWN...",!
+				#; hang 10
+				Set leftScope.CompletionType = "NONE"
+				Return leftScope
+			}
 			Set leftScope.CompletionType = "PROPERTY,FUNCTION"
 			Set leftScope.CompletionScope = "DIRECT"
 
 			Set rightInputScope = ..InferType(pNode.Right, leftScope)
-			
-			/// Right scope is empty and does not contain any identifier/prefix, so we suggest based on the left scope
-			If (rightInputScope.DataType = "UNKNOWN") {
-				/// Reset the token prefix set on the left side, as RHS is empty
+
+			zw rightInputScope
+			If (rightInputScope.DataType = "EMPTY") {
+				w "IS EMPTY",!
+				#; hang 5
+				zw pNode.Left
+				zw leftScope
+				zw rightInputScope
+				zw pScope
+				w "hanigng2.."
+				#; hang 10
+				#; hang 10
+				#; hang 10
+				/// Right scope is empty or unknown, so we suggest based on the left scope
+				/// Reset the token prefix set on the left side, as RHS may contain a prefix
 				Set leftScope.PrefixToken = ""
+				Set leftScope.Function = rightInputScope.Function
+				Set leftScope.ScopedVariables = leftScope.ScopedVariables _ rightInputScope.ScopedVariables
 				Return leftScope
-			} ElseIf (rightInputScope.DataType = "STRING") {
-				/// There is a string on the LH
-				/// The completion type is a function
-				Set rightInputScope.CompletionType = "FUNCTION"
-				Set rightInputScope.CompletionScope = "DIRECT"
+			} ElseIf (rightInputScope.PrefixToken = "") {
+				/// If the RHS was consumed, this means it is a valid token,
+				/// we should suggest operators
+				#; Set rightInputScope.CompletionType = "OPERATOR"
+				#; Set rightInputScope.CompletionScope = "DIRECT"
+			}
+
+			If (rightInputScope.DataType = "UNKNOWN") {
+				zw pScope
+				zw leftScope
+				zw rightInputScope
+				w "RHS IS UNKNOWN...",!
+				#; hang 5
+				Set leftScope.PrefixToken = rightInputScope.PrefixToken
+				Set leftScope.Function = rightInputScope.Function
+				Set leftScope.ScopedVariables = leftScope.ScopedVariables _ rightInputScope.ScopedVariables
+				Set leftScope.CompletionType = rightInputScope.CompletionType
+				Set leftScope.CompletionScope = rightInputScope.CompletionScope
+				Return leftScope
 			}
 
 			Return rightInputScope
@@ -211,7 +252,7 @@ Method InferType(pNode As FHIR.FHIRPath.Expr.Expression, pScope As FHIR.FHIRPath
 			Set rightScope = ..InferType(pNode.Right, leftScope)
 
 			Set newContext = ""
-			If rightScope.DataType = "UNKNOWN" {
+			If rightScope.DataType = "EMPTY" {
 				/// The RHS does not have any data within it, the cursor is here
 				Set leftScope.CompletionType = "VALUE"
 				Set leftScope.CompletionScope = "ALL"
@@ -244,7 +285,20 @@ Method InferType(pNode As FHIR.FHIRPath.Expr.Expression, pScope As FHIR.FHIRPath
 
 			Set rightScope = ..InferType(pNode.Right, fnScope)
 
-			Return:rightScope'="UNKNOWN" rightScope
+			If (pNode.Op = "|") {
+				/// In the case of union, we merge contexts
+				Do rightScope.MergeScope(leftScope)
+			}
+
+			If (rightScope.DataType = "UNKNOWN") {
+				Set fnScope.PrefixToken = rightScope.PrefixToken
+				Set fnScope.ScopedVariables = fnScope.ScopedVariables _ rightScope.ScopedVariables
+				Set fnScope.CompletionType = rightScope.CompletionType
+				Set fnScope.CompletionScope = rightScope.CompletionScope
+				Return fnScope
+			}
+
+			Return:rightScope.DataType'="EMPTY" rightScope
 			Return pScope
 		} Else {
 			#; 109
@@ -263,7 +317,7 @@ Method InferType(pNode As FHIR.FHIRPath.Expr.Expression, pScope As FHIR.FHIRPath
 
 			Set rightScope = ..InferType(pNode.Right, inScope)
 
-			If (rightScope.DataType = "UNKNOWN") {
+			If (rightScope.DataType = "EMPTY") {
 				Set leftScope.CompletionType = "PROPERTY"
 				Set leftScope.CompletionScope = "DIRECT"
 				Set leftScope.PrefixToken = ""
@@ -298,12 +352,41 @@ Method InferType(pNode As FHIR.FHIRPath.Expr.Expression, pScope As FHIR.FHIRPath
 			Set fnScope.PrefixToken = ""
 
 			Set lastArgScope = ..InferType(pNode.Args.GetAt(pNode.Args.Size), fnScope)
+			If (lastArgScope.Function = "") {
+				Set lastArgScope.Function = fnScope.Function
+			}
 
-			Return:lastArgScope.DataType'="UNKNOWN" lastArgScope
+			If (lastArgScope.Function="as")&&(lastArgScope.DataType="FHIRTYPE")&&($LL(lastArgScope.FHIRType)=1) {
+				/// TODO: Too much dealing with edge cases here...
+				/// Use function Processors or something else to split logic of functions depending on
+				/// whether we're entering the function, leaving it, setting the scope etc.
+				/// also pass an instance of InferenceEngine (or Autocomplete) in to the processor
+				w "he",!
+				Set lastArgScope.CompletionType = "NONE"
+			}
+			#; Set lastArgScope.CompletionType = 
+			#; Set lastArgScope.Function = fnScp
+			Set lastArgScope.ScopedVariables = fnScope.ScopedVariables
+
+			If (pNode.Callee.Name = "union") {
+				zw pScope
+				zw fnScope
+				zw lastArgScope
+				#; w "IS UNION",!
+				#; hang 10
+			}
+
+			If (lastArgScope.DataType = "UNKNOWN") {
+				Set fnScope.PrefixToken = lastArgScope.PrefixToken
+			}
+
+			Return:(lastArgScope.DataType'="EMPTY")&&((lastArgScope.DataType'="UNKNOWN")) lastArgScope
 			Return fnScope
+			#; Return lastArgScope
 		} Else {
 			/// If the call is not partial, we can infer the type based on the function definition
 			Set unchangedScopeFns = $lb("skip","tail")
+			Set initFn = pScope.Function
 			If $LF(unchangedScopeFns, pNode.Callee.Name) {
 				/// These functions do not change the scope in any way
 				Set pScope.CompletionType = "NONE"
@@ -321,28 +404,39 @@ Method InferType(pNode As FHIR.FHIRPath.Expr.Expression, pScope As FHIR.FHIRPath
 			} ElseIf (pNode.Callee.Name = "ofType") {
 				/// Create a new scope to be modified
 				Set freshScope = ##class(FHIR.FHIRPath.Context.Scope).%New()
+				Set freshScope.Function = pNode.Callee.Name
 				Set scope = ..InferType(pNode.Args.GetAt(1), freshScope)
 
 				Set scope.CompletionType = "ANY"
 				Set scope.CompletionScope = "DIRECT"
+				Set scope.Function = initFn
 				Return scope
 			} ElseIf (pNode.Callee.Name = "union") {
 				Set freshScope = ##class(FHIR.FHIRPath.Context.Scope).%New()
+				Set freshScope.Function = pNode.Callee.Name
 				Set scopeOfArg = ..InferType(pNode.Args.GetAt(1), freshScope)
 
 				/// Now merge the scopes
-				Set scope = pScope.MergeScope(scopeOfArg)
-				Return scope
+				Do pScope.MergeScope(scopeOfArg)
+				Set pScope.Function = initFn
+				Return pScope
 			} ElseIf (pNode.Callee.Name = "as") {
 				/// Try to cast/infer type
-				Set tScope = ..InferType(pNode.Args.GetAt(1), pScope)
-
+				Set pScope.Function = pNode.Callee.Name
+				Set fnScope = ..InferFunctionScope(pNode.Callee.Name, pScope)
+				Set tScope = ..InferType(pNode.Args.GetAt(1), fnScope)
+				zw pScope
+				w !,"Passing in TO iNFER..."
+				zw tScope
+				#; hang 5
 				/// For choice fields, attempt to create a scope
 				Set type = tScope.PrefixToken
 				
 				/// TODO: Odd way of doing this, should perform this at the stage of setting the FHIRType,
 				/// not here
 				If ($LF($LISTFROMSTRING($LISTTOSTRING(tScope.FHIRType)), type)) {
+					w "h",!
+					#; hang 10
 					/// This is a valid type for this field, cast as this type
 					/// and move the context to a subfield if this was a
 					/// choice field
@@ -362,14 +456,61 @@ Method InferType(pNode As FHIR.FHIRPath.Expr.Expression, pScope As FHIR.FHIRPath
 				Set tScope.CompletionScope = "DIRECT"
 				Set tScope.CompletionType = "PROPERTY,OPERATOR"
 
+				Set tScope.Function = initFn
 				Return tScope
 
 			} ElseIf (pNode.Callee.Name = "where") {
-
+				Set pScope.Function = pNode.Callee.Name
 				/// Create a context for resolving the extension
 				Set nScope = ..InferType(pNode.Args.GetAt(1), pScope)
-
+				Set nScope.Function = initFn
 				Return nScope
+			} ElseIf (pNode.Callee.Name = "extension") {
+				/// Simulate a BEXP
+				/// TODO: Not a nice way of handling this, find something better.
+
+				Set extScope = ..InferType(pNode.Args.GetAt(1), pScope)
+				
+				If (extScope.DataType = "STRING") {
+					Set url = extScope.LastField
+					Set nextScope = ..CreateScope("extension", pScope, .success)
+					If ('success) {
+						Set pScope.CompletionType = "NONE"
+						Return pScope
+					}
+
+					/// The extension field exists for this property
+					Set glob = $LG(nextScope.GlobalRefs, 1)
+					Set profileForExtension = ##class(FHIR.TypeAssist.Utils).FindProperty(@glob, "profile")
+
+					Return:$LL(profileForExtension)'=1 nextScope
+
+					For i=1:1:$LL(..Loader.packageIdList) {
+						Set pkg = $LG(..Loader.packageIdList, i)
+
+						Set base = ##class(FHIR.TypeAssist.Utils).AppendSubscript("^FHIR.TypeAssist", $lb(pkg, "Type", "Extension", $LG(profileForExtension, 1)))
+						If ($DATA(@base)) {
+							Set nScope = nextScope.Duplicate()
+							Set nScope.CompletionType = "PROPERTY,FUNCTION"
+							Set nScope.DataType = "FHIRTYPE"
+							Set nScope.FHIRType = $lb("Extension")
+							Set nScope.GlobalRefs = base
+
+							w "found base..."
+
+							Return nScope
+						}
+					}
+					zw @glob
+					zw profileForExtension
+					Set nextScope = "https://fhir.hl7.org.uk/StructureDefinition/Extension-UKCore-NHSNumberVerificationStatus"
+					#; hang 10
+					#; ^FHIR.TypeAssist("fhir.r4.ukcore.stu3.currentbuild@0.25.0-pre-release","Resource","Patient","https://fhir.hl7.org.uk/StructureDefinition/UKCore-Patient","identifier","value")
+					zw nextScope
+					#; hang 10
+				}
+				zw type
+				#; hang 10
 			} Else {
 				/// TODO: This else statement should be removed, only here for development purposes until
 				/// tests pass
@@ -378,16 +519,17 @@ Method InferType(pNode As FHIR.FHIRPath.Expr.Expression, pScope As FHIR.FHIRPath
 			}
 		}
 	} ElseIf (name = "IdentExpr") {
-		w !,"Ident: " _ pNode.Name,!,!
-		zw pScope
 		Set pScope.PrefixToken = pNode.Name
 		Set scope = ..CreateScope(pNode.Name, pScope, .success)
 
+		zw scope
+		zw success
+		#; hang 10
 		If (success) {
 			/// If this IdentityExpr successfully advanced the scope, we consume the "PrefixToken" and send back
 			// the updated scope
 			Set scope.PrefixToken = ""
-			Set scope.CompletionType = "ANY"
+			Set scope.CompletionType = "OPERATOR"
 			Set scope.DataType = "FHIRTYPE"
 
 			Set scope.LastField = pNode.Name
@@ -401,15 +543,20 @@ Method InferType(pNode As FHIR.FHIRPath.Expr.Expression, pScope As FHIR.FHIRPath
 		If (pNode.Name = "true") || (pNode.Name = "false") {
 			/// True/false are special identifiers, consume
 			/// the identifier
-			Set scope.DataType = "BOOLEAN"
+			Set scope.DataType = "FHIRType"
+			Set scope.FHIRType = "boolean"
 			Set scope.CompletionType = "NONE"
 			Set scope.PrefixToken = ""
+		} ElseIf '($LF(scope.ScopedVariables, pNode.Name))&&($EXTRACT(pNode.Name, 1) = "$") {
+			Set scope.DataType = "UNKNOWN"
+			Set scope.FHIRType = ""
+			Set scope.CompletionType = "NONE"
 		}
 
 		Return scope
 	} ElseIf name = "PartialExpr" {
 		Set scope = ##class(FHIR.FHIRPath.Context.Scope).%New()
-		Set scope.DataType = "UNKNOWN"
+		Set scope.DataType = "EMPTY"
 		Return scope
 	} ElseIf name = "IndexExpr" {
 		Set scope = ..InferType(pNode.Field, pScope)
@@ -449,17 +596,24 @@ Method Suggest(pExpression As %String) As %ListOfDataTypes
 	Set scope = ##class(FHIR.FHIRPath.Context.Scope).%New()
 
 	If (..ResourceFilter '= "") {
-		Set scope = ..ContextHelper.CreateScope(..ResourceFilter, scope)
+		Set scope = ..ContextHelper.CreateScope(..ResourceFilter, scope, .success)
+		Set:success scope.CompletionType = "RESOURCE,PROPERTY"
 	}
 
-	Set scope.RootRef = scope.GlobalRefs
+	/// Create the root scope
+	Set scope.RootScope = scope
 	
+	zw scope
 	Set parser = ##class(FHIR.FHIRPath.Parser).ParseString(pExpression)
 	Set ast = parser.Root
 
 	/// Mark the cursor, not required but for future functionality..?
 	Do ..MarkCursor(ast)
 	Set endScope = ..InferType(ast, scope)
+
+	If (endScope.DataType = "EMPTY") {
+		Set endScope = scope
+	}
 
 	#; w !,!,!,"Final scope:",!
 	/// TODO: Remove this line..

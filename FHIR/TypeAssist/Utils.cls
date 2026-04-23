@@ -108,7 +108,17 @@ ClassMethod GetTypes(pPropList As %List) As %List
 }
 
 ClassMethod GetDirectTypesFromRefs(pGlobalRefs As %List) As %List {
-	Return ..FindPropertyFromRefs(pGlobalRefs, "type")
+	Return $LISTFROMSTRING($LISTTOSTRING(..FindPropertyFromRefs(pGlobalRefs, "type")))
+}
+
+ClassMethod GetTypeRefFromTypeName(pCorePkgId As %String, pType As %String) As %String {
+	Set base = ..AppendSubscript("^FHIR.TypeAssist", $lb(pCorePkgId, "Type", pType))
+
+	If ($DATA(@base)) {
+		Return ..DescendSubscript(base)
+	}
+
+	Return ""
 }
 
 ClassMethod GetTypeRefs(rootRef As %String) As %List
@@ -123,11 +133,16 @@ ClassMethod GetTypeRefs(rootRef As %String) As %List
 	Set base = $NAME(@rootRef, 1)
 	Set base = ..AppendSubscript(base, $lb("Type", type))
 
-	/// TODO: Deal with cases with multiple profile types rather than just the first...
 	If $LL(profileList) > 0 {
-		Set profile = $LG(profileList, 1)
-		Set base2 = ..AppendSubscript(base, profile)
-		Return:$DATA(@base2) $lb(base2)
+		Set profileRefs = ""
+		For i=1:1:$LL(profileList) {
+			Set profile = $LG(profileList, i)
+			Continue:profile=""
+
+			Set base2 = ..AppendSubscript(base, profile)
+			Set:$DATA(@base2) profileRefs = profileRefs _ $lb(base2)
+		}
+		Return:profileRefs'="" profileRefs
 	}
 
 	Return:'$DATA(@base) ""
